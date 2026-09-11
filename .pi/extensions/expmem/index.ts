@@ -122,7 +122,7 @@ const searchExperiments = defineTool({
 		kind: Type.Optional(Type.String({ description: "baseline|ablation|add_module|change_module|other" })),
 		paper: Type.Optional(Type.String({ description: "Filter by arxiv id or title substring" })),
 		upstream: Type.Optional(Type.String({ description: "Filter by parent experiment id" })),
-		status: Type.Optional(Type.String({ description: "planned|running|done|failed" })),
+		status: Type.Optional(Type.String({ description: "planned|running|done" })),
 		fields: Type.Optional(
 			Type.String({ description: "BM25 fields: papers,rationale,change,expected (default all)" }),
 		),
@@ -170,7 +170,7 @@ const createExperiment = defineTool({
 const completeExperiment = defineTool({
 	name: "complete_experiment",
 	label: "Complete experiment",
-	description: "Write actual metrics after training. Does not create a node; experiment_id must already exist.",
+	description: "Write actual metrics after training. Does not create a node; experiment_id must already exist. If there are no metrics (crash/OOM), the node is dropped and is not a DAG result.",
 	parameters: Type.Object({
 		collection: Type.String({ description: "Which experiment DB under EXPMEM_ROOT" }),
 		experiment_id: Type.String({ description: "Id returned by create_experiment" }),
@@ -179,7 +179,7 @@ const completeExperiment = defineTool({
 		delta: Type.Optional(Type.Number()),
 		error: Type.Optional(Type.String()),
 		note: Type.Optional(Type.String()),
-		failed: Type.Optional(Type.Boolean()),
+		failed: Type.Optional(Type.Boolean({ description: "Run itself failed with no metrics: drop the node from the DAG" })),
 	}),
 	async execute(_id, input) {
 		const project = input.collection || process.env.EXPMEM_PROJECT || "default";

@@ -107,18 +107,6 @@ def build_rec_ctr(root: Path) -> ExperimentLab:
             actual={"metrics": {"auc_cvr": 0.7318}, "verdict": "improved", "delta": 0.0018},
         ),
     )
-    _add(
-        lab,
-        dict(
-            kind="ablation",
-            rationale="try dropping ctx context features",
-            change="unplug ctx_feas from input_names",
-            expected="small drop",
-            upstream=["rec_baseline"],
-            node_id="rec_unplug_ctx_oom",
-            actual={"failed": True, "error": "CUDA OOM during eval", "verdict": "failed"},
-        ),
-    )
     return lab
 
 

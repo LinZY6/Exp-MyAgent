@@ -83,7 +83,7 @@ class ExperimentNode:
     change: str = ""
     expected: Outcome = field(default_factory=Outcome)
     actual: Optional[Outcome] = None
-    status: str = "planned"  # planned|running|done|failed
+    status: str = "planned"  # planned|running|done
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 

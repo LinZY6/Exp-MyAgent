@@ -83,8 +83,6 @@ def duplicate_of(
     hits = retrieve(store, query or change, kind=kind, top_k=5)
     want = " ".join(tokenize(change))
     for hit in hits:
-        if hit.get("status") == "failed":
-            continue
         same_change = " ".join(tokenize(str(hit.get("change") or ""))) == want
         if same_change and hit.get("kind") == kind:
             hit = dict(hit)

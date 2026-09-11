@@ -8,21 +8,23 @@ Pi-shell experiment agent: conversation + coding tools, plus a pluggable **expme
 cd G:\经验\MyAgent
 copy .env.example .env
 # edit .env — API key
-powershell -File scripts\bootstrap-node.ps1   # if Node is missing
-powershell -File scripts\bootstrap-python.ps1 # portable CPython, avoids the Windows Store stub
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bootstrap-node.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bootstrap-python.ps1
 npm install
 ```
+
+Windows 若提示「禁止运行脚本」，加上 `-ExecutionPolicy Bypass`，或直接用仓库根目录的 `pi.cmd`。
 
 ## Start
 
 ```powershell
-powershell -File scripts\pi.ps1
+.\pi.cmd
 ```
 
 Non-interactive smoke test:
 
 ```powershell
-powershell -File scripts\pi.ps1 -p --offline --no-session "Say exactly: ok"
+.\pi.cmd -p --no-session "Say exactly: ok"
 ```
 
 Interactive / print mode that should load project tools: add `-a` (trust this project for one run).
@@ -40,14 +42,14 @@ Four tools: `search_papers`, `search_experiments`, `create_experiment`, `complet
 Probe (same keywords, two collections):
 
 ```powershell
-powershell -File scripts\verify-expmem.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-expmem.ps1
 ```
 
 ## Reinstall Node / Python
 
 ```powershell
-powershell -File scripts\bootstrap-node.ps1
-powershell -File scripts\bootstrap-python.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bootstrap-node.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\bootstrap-python.ps1
 ```
 
 ## Next

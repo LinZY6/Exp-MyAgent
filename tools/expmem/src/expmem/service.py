@@ -165,14 +165,24 @@ class ExperimentLab:
         node = self.store.get(experiment_id)
         if not node:
             return {"ok": False, "error": f"not found: {experiment_id}"}
+        parsed = {str(k): float(v) for k, v in (metrics or {}).items()}
+        if not parsed:
+            self.store.delete(experiment_id)
+            return {
+                "ok": True,
+                "dropped": True,
+                "id": experiment_id,
+                "reason": "no metrics; run itself failed, not recorded on the DAG",
+                "error": error,
+            }
         actual = Outcome(
             note=note,
-            metrics={str(k): float(v) for k, v in (metrics or {}).items()},
+            metrics=parsed,
             verdict=verdict or ("failed" if failed else None),
             delta=delta,
             error=error,
         )
         node.actual = actual
-        node.status = "failed" if (failed or verdict == "failed") else "done"
+        node.status = "done"
         self.store.upsert(node)
         return {"ok": True, "node": node.card()}

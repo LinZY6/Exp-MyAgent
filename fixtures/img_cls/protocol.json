@@ -1,0 +1,24 @@
+{
+  "collection": "img_cls",
+  "task": "100-way image classification",
+  "dataset": "CIFAR-100 official test set (10000 images, 100 fine classes, 20 superclasses)",
+  "split": "test",
+  "primary_metric": "top1_acc",
+  "primary_higher_better": true,
+  "eval_script": "frozen: same CIFAR-100 test split for every node; ECE uses 15 equal-width bins as Guo et al. 2017",
+  "protocol": [
+    {"key": "top1_acc", "role": "primary", "higher_better": true, "note": "1 - test error"},
+    {"key": "top5_acc", "role": "companion", "higher_better": true, "note": "standard CIFAR-100 companion; not in Guo tables"},
+    {"key": "macro_f1", "role": "class_balance", "higher_better": true, "note": "macro-F1 over 100 classes"},
+    {"key": "confuse_similar", "role": "confusion", "higher_better": false, "note": "fraction of test images whose predicted fine class is wrong but in the same CIFAR-100 superclass"},
+    {"key": "ece", "role": "calibration", "higher_better": false, "note": "Expected Calibration Error, 15 bins (Guo et al.)"},
+    {"key": "mce", "role": "calibration", "higher_better": false, "note": "Maximum Calibration Error, 15 bins (Guo supp)"},
+    {"key": "nll", "role": "confidence", "higher_better": false, "note": "test negative log-likelihood (nats)"}
+  ],
+  "number_sources": {
+    "paper": "copied from the cited paper/table on CIFAR-100",
+    "transferred": "relative gain from a paper on a nearby backbone, applied to this DAG's parent",
+    "derived": "filled by a fixed formula from top1_acc because the paper did not print that column",
+    "frozen_preds": "top1/top5/macro_f1/confuse_similar copied from parent (post-hoc calibration does not change argmax)"
+  }
+}

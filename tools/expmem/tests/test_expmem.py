@@ -41,6 +41,54 @@ def test_create_retrieve_complete(tmp_path: Path):
     assert done["node"]["actual"]["verdict"] == "improved"
 
 
+def test_no_metrics_dropped_from_dag(tmp_path: Path):
+    lab = ExperimentLab(tmp_path, project="demo")
+    lab.create(kind="baseline", rationale="start", change="register", node_id="bl")
+    planned = lab.create(
+        kind="ablation",
+        rationale="try dropping ctx",
+        change="unplug ctx_feas",
+        upstream=["bl"],
+        node_id="oom",
+    )
+    assert planned["ok"] is True
+    dropped = lab.complete("oom", failed=True, error="CUDA OOM during eval")
+    assert dropped["ok"] is True
+    assert dropped.get("dropped") is True
+    assert lab.store.get("oom") is None
+    again = lab.create(
+        kind="ablation",
+        rationale="retry after more GPU",
+        change="unplug ctx_feas",
+        upstream=["bl"],
+    )
+    assert again["ok"] is True
+
+
+def test_negative_result_with_metrics_stays_and_blocks(tmp_path: Path):
+    lab = ExperimentLab(tmp_path, project="demo")
+    lab.create(kind="baseline", rationale="start", change="register", node_id="bl")
+    first = lab.create(
+        kind="other",
+        rationale="matrix scaling may overfit",
+        change="fit matrix scaling on val logits",
+        upstream=["bl"],
+        node_id="mat",
+    )
+    assert first["ok"] is True
+    done = lab.complete("mat", metrics={"top1_acc": 0.61}, verdict="regressed", delta=-0.11)
+    assert done["ok"] is True
+    assert done["node"]["status"] == "done"
+    again = lab.create(
+        kind="other",
+        rationale="retry matrix scaling",
+        change="fit matrix scaling on val logits",
+        upstream=["bl"],
+    )
+    assert again["ok"] is False
+    assert again.get("duplicate") is True
+
+
 def test_duplicate_rejected(tmp_path: Path):
     lab = ExperimentLab(tmp_path, project="demo")
     lab.create(

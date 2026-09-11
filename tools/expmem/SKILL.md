@@ -13,7 +13,7 @@
 | `kind` | 否 | `baseline` / `ablation` / `add_module` / `change_module` / `other` |
 | `paper` | 否 | 按论文 id/标题再过滤 |
 | `upstream` | 否 | 只看从某次实验接着改的节点 |
-| `status` | 否 | `planned` / `done` / `failed` |
+| `status` | 否 | `planned` / `running` / `done` |
 | `fields` | 否 | BM25 打哪些字段：`papers,rationale,change,expected`，默认全部 |
 | `top_k` | 否 | 返回条数，默认 8 |
 

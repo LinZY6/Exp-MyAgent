@@ -198,9 +198,9 @@ kind≠baseline 则 upstream 必填
 papers → PaperRef 列表
 fingerprint = compute_fingerprint(kind, upstream, change, papers)
 duplicate_of：
-  1) 同 fingerprint 且非 failed → 拒绝
+  1) 同 fingerprint → 拒绝（含已有指标的负结果）
   2) 否则 BM25(query=papers+rationale+change)，同 kind 且 change 分词相同 → 拒绝
-  failed 节点不挡（允许重做）
+  DAG 上只留有指标的节点；没跑出指标的 planned 会被 complete 删掉，因此不占去重
 force=true 可跳过去重
 append JSONL，status=planned，actual=null
 ```
@@ -229,14 +229,15 @@ append JSONL，status=planned，actual=null
 
 ### 2.4 `complete_experiment`
 
-**做什么：** 给已有 id 写 `actual`，`status` 改为 `done` 或 `failed`。
+**做什么：** 给已有 id 写 `actual`。有指标则 `status=done` 留在 DAG；没指标则从 DAG 删掉（训练/评测本身失败，不算做过）。
 
 **实现逻辑：**
 
 ```text
 get(id) 没有 → ok=false
-actual = Outcome(metrics, verdict, delta, error, note)
-status = failed if failed or verdict==failed else done
+metrics 为空 → delete 该节点，返回 dropped=true（不进 DAG）
+否则 actual = Outcome(metrics, verdict, delta, error, note)
+status = done（方法效果差用 verdict=regressed/failed，不另开 status=failed）
 upsert 整行（按 id 替换，不追加第二条）
 ```
 

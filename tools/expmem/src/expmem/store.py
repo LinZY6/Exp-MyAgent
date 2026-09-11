@@ -47,9 +47,18 @@ class ExperimentStore:
 
     def find_by_fingerprint(self, fingerprint: str) -> Optional[ExperimentNode]:
         for rec in reversed(self.list()):
-            if rec.fingerprint == fingerprint and rec.status != "failed":
+            if rec.fingerprint == fingerprint:
                 return rec
         return None
+
+    def delete(self, experiment_id: str) -> bool:
+        with self._lock:
+            rows = self._read_all()
+            kept = [r for r in rows if r.id != experiment_id]
+            if len(kept) == len(rows):
+                return False
+            self._rewrite(kept)
+            return True
 
     def append(self, node: ExperimentNode) -> ExperimentNode:
         with self._lock:

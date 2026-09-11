@@ -22,7 +22,7 @@ TOOL_SCHEMA = [
             "kind": "optional. baseline|ablation|add_module|change_module|other (comma-separated ok)",
             "paper": "optional. arxiv id or title substring",
             "upstream": "optional. parent experiment id(s)",
-            "status": "optional. planned|running|done|failed",
+            "status": "optional. planned|running|done",
             "fields": "optional. BM25 fields: papers,rationale,change,expected (default all)",
             "top_k": "optional int, default 8",
         },
@@ -48,7 +48,7 @@ TOOL_SCHEMA = [
     },
     {
         "name": "complete_experiment",
-        "description": "Write actual results after the experiment ran.",
+        "description": "Write actual metrics after the experiment ran. No metrics drops the node (not a DAG result).",
         "parameters": {
             "collection": "required. project name under EXPMEM_ROOT",
             "experiment_id": "string",
@@ -56,7 +56,7 @@ TOOL_SCHEMA = [
             "verdict": "improved|flat|regressed|failed",
             "delta": "float",
             "error": "string",
-            "failed": "bool",
+            "failed": "bool. no metrics: drop the node from the DAG",
         },
     },
 ]

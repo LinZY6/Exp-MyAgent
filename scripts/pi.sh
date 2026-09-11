@@ -41,4 +41,16 @@ if [[ ! -f "$PI_CLI" ]]; then
   exit 1
 fi
 
-exec node "$PI_CLI" "$@"
+PI_ARGS=("$@")
+has_model=0
+for a in "${PI_ARGS[@]+"${PI_ARGS[@]}"}"; do
+  if [[ "$a" == "--model" || "$a" == "-m" || "$a" == --model=* ]]; then
+    has_model=1
+    break
+  fi
+done
+if [[ -n "${PI_MODEL:-}" && "$has_model" -eq 0 ]]; then
+  PI_ARGS=(--model "$PI_MODEL" "${PI_ARGS[@]+"${PI_ARGS[@]}"}")
+fi
+
+exec node "$PI_CLI" "${PI_ARGS[@]+"${PI_ARGS[@]}"}"

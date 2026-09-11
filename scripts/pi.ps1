@@ -91,15 +91,29 @@ if ($env:ANTHROPIC_AUTH_TOKEN) {
 } elseif ($env:OPENAI_API_KEY) {
     Write-Host "auth=OPENAI_API_KEY"
 } elseif ($env:DEEPSEEK_API_KEY) {
-    Write-Host "auth=DEEPSEEK_API_KEY"
+    Write-Host "auth=DEEPSEEK_API_KEY ($($env:DEEPSEEK_API_KEY.Length) chars)"
 } else {
     Write-Host "auth=none (copy .env.example to .env, or run /login inside Pi)"
+}
+if ($env:PI_MODEL) {
+    Write-Host "model=$env:PI_MODEL"
 }
 
 # Drop a leading "--" so `powershell -File scripts\pi.ps1 -- -v` still works.
 $PiArgs = @($args)
 if ($PiArgs.Count -ge 1 -and $PiArgs[0] -eq "--") {
     $PiArgs = $PiArgs[1..($PiArgs.Count - 1)]
+}
+
+$hasModel = $false
+foreach ($a in $PiArgs) {
+    if ($a -eq "--model" -or $a -eq "-m" -or ($a -is [string] -and $a.StartsWith("--model="))) {
+        $hasModel = $true
+        break
+    }
+}
+if ($env:PI_MODEL -and -not $hasModel) {
+    $PiArgs = @("--model", $env:PI_MODEL) + $PiArgs
 }
 
 & node $PiCli @PiArgs
