@@ -1,0 +1,18 @@
+{
+  "name": "experiment-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pi-shell experiment agent (local / SSH)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "pi": "node node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+    "pi:help": "node node_modules/@earendil-works/pi-coding-agent/dist/cli.js --help",
+    "pi:version": "node node_modules/@earendil-works/pi-coding-agent/dist/cli.js -v"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1"
+  }
+}

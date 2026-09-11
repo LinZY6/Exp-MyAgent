@@ -1,0 +1,15 @@
+node_modules/
+.vendor/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+dist/
+build/
+experiments/
+!experiments/.gitkeep
+expmem_data/
