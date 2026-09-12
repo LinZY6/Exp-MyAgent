@@ -1,7 +1,7 @@
 # 进度：数据合成、评测、可执行实验
 
 日期：2026-09-12  
-范围：图像分类账本仍是抄论文数字的决策评测（`img_cls`）。另开一条 **CPU 可跑** 的 `fn_fit`（Friedman #1 拟合），指标是真算出来的。`CHARTER.md` 仍是空的 `rec_ctr`，没有改 Charter。
+范围：图像分类账本仍是抄论文数字的决策评测（`img_cls`）。另开一条 **CPU 可跑** 的 `fn_fit`（Friedman #1 拟合），指标是真算出来的。又加一道更快的自造数据题 `sp_fit`（稀疏线性，`run_spfit`）。`CHARTER.md` 仍是空的 `rec_ctr`，没有改 Charter。
 
 ---
 
@@ -28,7 +28,7 @@ LLM 填 JSON 参数
 | `query` | 是 | arXiv 检索串，如 `"Densely Connected Convolutional Networks DenseNet"` |
 | `limit` | 否 | 最多几篇，默认 5 |
 
-返回大约：`{"ok": true, "hits": [{"paper_id": "arxiv:1608.06993", "title": "...", "summary": "...", "url": "..."}]}`。
+返回大约：`{"ok": true, "hits": [{"paper_id": "arxiv:1608.06993", "title": "...", "summary": "...", "url": "..."}]}`。这是摘要，不是全文。全文走独立包 `papers`：`fetch_paper` 落到 `<lab>/papers/`，再用 `search_paper` / `read_paper` 切片读（最多 80 行）。
 
 ### 1.2 `search_experiments` — 在一个 collection 里 BM25
 
@@ -378,14 +378,21 @@ Python **不会**用队列自动点下一刀；**LLM** 把想法放进 lab 的 `
 <lab>/src/fnfit/fit.py           改模型
 <lab>/src/fnfit/world.py         改数据/划分
 <lab>/fn_fit/experiments.jsonl   账本（create/complete 写这里）
+<lab>/reviews/packets/           审查材料包
+<lab>/reviews/verdicts/          审查结论 JSON
 ```
 
 ---
 
-## 6. 还没做
+## 6. 多角色提示词（审查闸）
+
+角色与提示词路径见 `.pi/agents/ROSTER.md`。材料包约定 `.pi/agents/PACKET.md`。现在是 **同一 Pi 会话里换 skill + 白名单材料**，不是多进程、也不是 Python 把审查串成循环。场停前必须有 Divergence 的 `exhausted` 结论文件。
+
+## 7. 还没做
 
 - 把 `CHARTER.md` 切到 `img_cls` 或 `fn_fit`（要你明确说才改）
 - 用 `fn_fit` 做一轮「Agent 自己 create+run+complete」的端到端评测
 - 另外几条研究方向用同一套「论文 → 协议 → DAG → 出题」
 - `viz`；通用 SSH/`cwd+command` 的 run 包（fnfit 不是那个）
 - GitHub 远端：本地已有提交，本机访问 `github.com:443` 不稳定，push 需在能连 GitHub 的网络执行
+- 审查角色各自开独立 Pi 会话（现在是同一会话里 `read` 对应 `SKILL.md`）

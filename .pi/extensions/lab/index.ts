@@ -116,6 +116,30 @@ const assertLabPath = defineTool({
 	},
 });
 
+const labCodeHash = defineTool({
+	name: "lab_code_hash",
+	label: "Hash lab runner code",
+	description:
+		"SHA-256 of this lab's src/ plus protocol.json. Patch-reviewer must copy code_sha256 " +
+		"into the approve verdict. After a later edit the hash changes; old approve files do not match.",
+	parameters: Type.Object({}),
+	async execute() {
+		return asResult(invoke({ action: "lab_code_hash" }));
+	},
+});
+
+const protocolCheck = defineTool({
+	name: "protocol_check",
+	label: "Protocol gate before run",
+	description:
+		"Hard check before any lab fit: if src/ or protocol.json drifted from the init baseline, " +
+		"a patch-reviewer approve must carry the current lab_code_hash. Old approve files are not enough.",
+	parameters: Type.Object({}),
+	async execute() {
+		return asResult(invoke({ action: "protocol_check" }));
+	},
+});
+
 export function readLabSession(root = repoRoot()): { lab?: string; collection?: string } {
 	const p = join(root, ".pi", "lab-session.json");
 	if (!existsSync(p)) return {};
@@ -130,4 +154,6 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool(useLab);
 	pi.registerTool(labStatus);
 	pi.registerTool(assertLabPath);
+	pi.registerTool(labCodeHash);
+	pi.registerTool(protocolCheck);
 }

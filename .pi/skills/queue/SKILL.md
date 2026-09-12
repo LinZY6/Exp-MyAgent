@@ -24,3 +24,5 @@ Do not ask the user to pick 1/2/3. Do not write a `while` in Python that pops th
 If `queue_take` returns `already_running`, finish or `queue_set` skip/done that task first.
 
 `blocked_on` = needs lab code (e.g. MARS). Unblock after you edit `fit.py`, then `status=queued`.
+
+Divergence Reviewer (`.pi/skills/divergence-reviewer/SKILL.md`) may `queue_put` only. It must not `queue_take` and must not treat an empty queue as campaign stop.

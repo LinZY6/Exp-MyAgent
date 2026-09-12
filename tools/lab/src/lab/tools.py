@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from lab.codehash import check_run, digest
 from lab.safety import inspect_lab, is_within, resolve_lab_path
 from lab.session import load as load_session
 from lab.session import save as save_session
@@ -115,12 +117,49 @@ def use_lab(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _bound_lab(params: dict[str, Any]) -> Path | None:
+    raw = str(params.get("lab") or "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    env = (os.environ.get("EXPERIMENT_LAB") or "").strip()
+    if env:
+        return Path(env).expanduser().resolve()
+    st = status(_repo(params))
+    lab = str(st.get("lab") or "").strip()
+    return Path(lab).resolve() if lab else None
+
+
+def code_hash(params: dict[str, Any]) -> dict[str, Any]:
+    lab = _bound_lab(params)
+    if lab is None:
+        return {"ok": False, "error": "no lab bound; use_lab first"}
+    if not lab.is_dir():
+        return {"ok": False, "error": f"lab not a directory: {lab}"}
+    data = digest(lab)
+    data["ok"] = True
+    data["lab"] = str(lab)
+    return data
+
+
+def protocol_check(params: dict[str, Any]) -> dict[str, Any]:
+    lab = _bound_lab(params)
+    if lab is None:
+        return {"ok": False, "error": "no lab bound; use_lab first"}
+    out = check_run(lab)
+    out["lab"] = str(lab)
+    return out
+
+
 def handle(params: dict[str, Any]) -> dict[str, Any]:
     action = str(params.get("action") or "use_lab").strip()
     if action in {"status", "lab_status"}:
         return status(_repo(params))
     if action in {"assert", "assert_lab_path"}:
         return assert_path(params)
+    if action in {"code_hash", "lab_code_hash"}:
+        return code_hash(params)
+    if action in {"protocol_check", "check_run"}:
+        return protocol_check(params)
     if action in {"use_lab", "inspect", "bind"}:
         return use_lab(params)
     return {"ok": False, "error": f"unknown action: {action}"}

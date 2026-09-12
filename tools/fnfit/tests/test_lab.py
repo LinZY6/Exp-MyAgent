@@ -33,6 +33,7 @@ def test_init_does_not_overwrite_jsonl(tmp_path: Path):
     assert "fn_fit/experiments.jsonl" in again["skipped"]
     assert (lab / "src" / "fnfit" / "fit.py").is_file()
     assert (lab / "CHARTER.md").is_file()
+    assert (lab / ".lab_code_baseline.json").is_file()
 
 
 def test_lab_code_overlay_changes_metrics(tmp_path: Path):
@@ -43,6 +44,16 @@ def test_lab_code_overlay_changes_metrics(tmp_path: Path):
     if "SEED = 7" not in text:
         raise AssertionError("expected SEED = 7 in world.py")
     world.write_text(text.replace("SEED = 7", "SEED = 99", 1), encoding="utf-8")
+    sys.path.insert(0, str(ROOT / "tools" / "lab" / "src"))
+    from lab.codehash import digest  # noqa: E402
+
+    sha = digest(lab)["code_sha256"]
+    verdict_dir = lab / "reviews" / "verdicts"
+    verdict_dir.mkdir(parents=True, exist_ok=True)
+    (verdict_dir / "patch-overlay.json").write_text(
+        json.dumps({"role": "patch-reviewer", "verdict": "approve", "code_sha256": sha}) + "\n",
+        encoding="utf-8",
+    )
     env = os.environ.copy()
     env["EXPERIMENT_LAB"] = str(lab)
     env["PYTHONUTF8"] = "1"

@@ -30,4 +30,4 @@ Put the same knobs in `change` (prose, for BM25) and in `run_experiment` (struct
 
 After a successful run, `complete_experiment` with the returned `metrics` (`test_mse` is primary, lower is better). Empty metrics / crash → complete with no metrics so the node is dropped.
 
-Then **you** pick the next spec from the metrics and DAG. Do not ask the user to choose among candidates. Do not write a Python loop that picks the next spec. One node at a time (create → run → complete) until the experiment-agent stop rules fire.
+Then **you** pick the next spec from the metrics and DAG. Do not ask the user to choose among candidates. Do not write a Python loop that picks the next spec. One node at a time (create → run → complete) until the experiment-agent stop rules fire. If you edited lab `fit.py` / `world.py` / `protocol.json`, call `lab_code_hash` and get a **new** Patch Reviewer approve that copies that hash; `run_experiment` refuses if the tree does not match. Campaign stop still requires Divergence Reviewer (`.pi/agents/ROSTER.md`).

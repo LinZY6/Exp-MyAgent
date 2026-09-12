@@ -22,6 +22,6 @@ Same `kind` + nearly the same `change` → already done; do not `create_experime
 
 Other tools:
 
-1. `search_papers` — arXiv only (not the experiment DB).
+1. `search_papers` — arXiv metadata (title + short abstract), not the experiment DB. Full text is the `papers` pack (`fetch_paper` then sliced `read_paper`).
 2. `create_experiment` — search first; pass `collection`.
 3. `complete_experiment` — write actual metrics after training; needs an existing id. No metrics (crash/OOM) drops the node; it is not a DAG result.

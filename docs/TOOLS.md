@@ -44,6 +44,7 @@ LLM
 | `complete_experiment` | `complete_experiment` |
 | `open_experiment_graph` | 仅 viz 包 |
 | `run_experiment` | 仅 run 包 |
+| `fetch_paper` / `paper_outline` / `search_paper` / `read_paper` | 仅 papers 包 |
 
 现有 `pi-extension` 把后三个塞进名为 `expmem` 的万能 tool，**接入时拆开**。那是为了快，不是最终形态。
 
@@ -257,6 +258,23 @@ upsert 整行（按 id 替换，不追加第二条）
 
 ---
 
+## 2.5 包 `papers`（全文，切片读）
+
+**做什么：** 把一篇 arXiv 论文下载到 `<lab>/papers/<id>/`，抽出 `paper.txt`。工具返回大纲 / 检索片段 / 限长切片，**禁止**一次把全文塞进模型。
+
+**实现逻辑：**
+
+1. `fetch_paper`：arXiv HTML → ar5iv → 源 TeX →（可选）pypdf。写 `meta.json` + `paper.txt` + 能下到的 `source.pdf`。返回值不含正文。
+2. `paper_outline`：标题行号。
+3. `search_paper`：最多 8 条 snippet。
+4. `read_paper`：默认 50 行，硬顶 80 行 / 6000 字符；`truncated` 时用 `next_line` 再读。
+
+**间隙：** 不写 JSONL；不 import expmem。关掉本包后 `search_papers` 仍只有摘要。
+
+**验收：** `tools/papers/tests/test_papers.py`（无网）；`tests/packs/test_papers_isolation.py`（fetch 前后 jsonl hash 不变）。
+
+---
+
 ## 3. 包 B — `viz`（只读图）
 
 **做什么：** 把某个 collection 画成 DAG（边 = `upstream_ids`）。
@@ -321,6 +339,14 @@ poly degree 3 + features=all → 拒绝（CPU 边界）
 
 ---
 
+## 4.5 包 `spfit`（快速验证题）
+
+**做什么：** 稀疏线性合成回归，CPU，自造数据。题目：`fixtures/sp_fit/PROBLEM.md`。Pi tool 名是 **`run_spfit`**，不要覆盖 `run_experiment`。
+
+及格线：lasso / oracle 的 `test_mse` 比全特征 OLS 低 0.2 以上；oracle `n_nonzero=4`。测试：`tools/spfit/tests/test_spfit.py`。
+
+---
+
 ## 5. 功能间隙图（谁碰谁）
 
 ```text
@@ -328,6 +354,8 @@ search_papers          ──X──  JSONL
         │
         │ 仅 skill 顺序，无代码调用
         ▼
+fetch_paper / read_paper ──X── JSONL   （全文在 <lab>/papers，切片返回）
+        │
 search_experiments  ←读─ JSONL ─写→ create / complete
         │                         │
         │ 不调用                  │ upsert 不改 change

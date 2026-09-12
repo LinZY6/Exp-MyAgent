@@ -4,6 +4,8 @@ This repo is an **Agent**, not a workflow: tool results go back into the prompt;
 
 Pi owns conversation, read/grep/edit, and shell. Domain tools live in `.pi/extensions/` (expmem first). Project direction lives in `CHARTER.md`; do not silently change the task, dataset, or primary metric.
 
+Role prompts (Experimenter + reviewers) live in `.pi/skills/<role>/SKILL.md`. Index: `.pi/agents/ROSTER.md`. Reviewers are extra prompts and whitelist packets, not a Python campaign loop. Only the Experimenter runs fits.
+
 ## Rules
 
 - Do not implement a Python campaign loop that picks the next experiment.

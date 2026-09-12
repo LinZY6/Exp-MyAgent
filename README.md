@@ -46,13 +46,17 @@ Windows Pi ships a **powershell** tool. For **bash**, install [Git for Windows](
 
 ## expmem
 
-Four memory tools: `search_papers`, `search_experiments`, `create_experiment`, `complete_experiment`.
+Four memory tools: `search_papers`, `search_experiments`, `create_experiment`, `complete_experiment`. `search_papers` is title + abstract only.
+
+Full-text pack **papers**: `random_paper` picks and downloads one arXiv paper (you do not need an id or a local PDF). `fetch_paper` does the same for a known id. Then `paper_outline` / `search_paper` / `read_paper` return **slices** (max 80 lines).
 
 CPU runner pack **fnfit** (`run_experiment`): frozen Friedman #1 fit on stdlib OLS / ridge / polynomial features. Does not write the ledger; Agent must `complete_experiment` after. Seed with `fixtures\fn_fit\build.py`.
 
+Quick-verify pack **spfit** (`run_spfit`): synthetic sparse linear regression, 40 features / 4 nonzero, CPU. 题目见 `fixtures/sp_fit/PROBLEM.md`。自测：`.\.vendor\python\python.exe tools\spfit\tests\test_spfit.py`。
+
 - Data: `expmem_data/` (gitignored; seeded from `fixtures/` on first launch)
-- Python packages: `tools/expmem`, `tools/fnfit`
-- Pi glue: `.pi/extensions/expmem`, `.pi/extensions/fnfit`
+- Python packages: `tools/expmem`, `tools/fnfit`, `tools/papers`
+- Pi glue: `.pi/extensions/expmem`, `.pi/extensions/fnfit`, `.pi/extensions/papers`
 
 Probe (same keywords, two collections):
 

@@ -1,0 +1,22 @@
+{
+  "collection": "sp_fit",
+  "task": "recover a sparse linear function from noisy Gaussian covariates",
+  "dataset": "synthetic: 40 N(0,1) features, 4 nonzero coefficients at indices 0,3,7,12; noise N(0, 0.8^2)",
+  "split": "frozen: seed=11, n_train=120, n_test=80; every node uses this exact split",
+  "primary_metric": "test_mse",
+  "primary_higher_better": false,
+  "eval_script": "stdlib OLS / ridge / lasso CD / oracle OLS on the frozen split; no numpy",
+  "generator": "y = 3*x0 - 2*x3 + 1.5*x7 + 2.5*x12 + N(0, 0.8^2); other coefficients 0",
+  "knobs": {
+    "model": ["ols", "ridge", "lasso", "oracle"],
+    "features": ["all", "oracle"],
+    "alpha": "ridge default 1; lasso default 0.08; ols and oracle must be 0"
+  },
+  "protocol": [
+    {"key": "test_mse", "role": "primary", "higher_better": false, "note": "MSE on frozen test"},
+    {"key": "test_mae", "role": "companion", "higher_better": false, "note": "MAE on frozen test"},
+    {"key": "test_r2", "role": "companion", "higher_better": true, "note": "R2 on frozen test"},
+    {"key": "train_mse", "role": "overfit", "higher_better": false, "note": "train MSE"},
+    {"key": "n_nonzero", "role": "sparsity", "higher_better": false, "note": "count |beta_j|>1e-6 excluding intercept"}
+  ]
+}

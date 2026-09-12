@@ -35,6 +35,18 @@ if _lab:
 from fnfit.tools import handle  # noqa: E402
 
 
+def _patch_gate(lab: str) -> dict | None:
+    if not lab:
+        return None
+    sys.path.insert(0, str(_REPO / "tools" / "lab" / "src"))
+    from lab.codehash import check_run  # noqa: E402
+
+    out = check_run(Path(lab))
+    if out.get("ok"):
+        return None
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     params: dict = {}
@@ -44,6 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         params = json.loads(raw or "{}")
     elif argv:
         params = json.loads(argv[0])
+    blocked = _patch_gate(_session_lab())
+    if blocked is not None:
+        blocked["experiment_id"] = str(params.get("experiment_id") or "")
+        print(json.dumps(blocked, ensure_ascii=False))
+        return 0
     print(json.dumps(handle(params), ensure_ascii=False))
     return 0
 

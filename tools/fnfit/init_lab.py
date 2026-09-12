@@ -108,6 +108,15 @@ def init_lab(lab: Path, *, repo: Path, empty: bool = False) -> dict:
     else:
         skipped.append("README.md")
 
+    sys.path.insert(0, str(repo / "tools" / "lab" / "src"))
+    from lab.codehash import BASELINE_NAME, write_baseline  # noqa: E402
+
+    if not (lab / BASELINE_NAME).is_file():
+        write_baseline(lab)
+        copied.append(BASELINE_NAME)
+    else:
+        skipped.append(BASELINE_NAME)
+
     return {
         "ok": True,
         "lab": str(lab),
