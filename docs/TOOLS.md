@@ -287,33 +287,37 @@ upsert 整行（按 id 替换，不追加第二条）
 
 ---
 
-## 4. 包 C — `run`（后期，可整包删除）
+## 4. 包 C — `fnfit`（可执行世界；可整包删除）
 
-**做什么：** 执行训练命令；**不**写 ledger。成功/失败后由 Agent 再调 `complete_experiment`。
+**做什么：** 在冻结的 Friedman #1 划分上拟合一个 spec；**不**写 ledger。成功/失败后由 Agent 再调 `complete_experiment`。
 
-**建议接口：**
+**接口（已实现）：**
 
 ```text
-输入：experiment_id, cwd, command, 可选 ssh_host
-输出：{ok, exit_code, log_path}
+输入：experiment_id, model=ols|ridge|poly, features=all|signal|drop_x4, 可选 degree / alpha / collection
+输出：{ok, metrics:{test_mse,test_mae,test_r2,train_mse}, spec, n_params, elapsed_ms}
 ```
 
-实现可先本地 `subprocess`，SSH 另文件 `backend_ssh.py`。Pi 侧一个 tool。
+实现：`tools/fnfit/`（stdlib 线性代数，无 numpy）。Pi：`.pi/extensions/fnfit/index.ts` 只 spawn。数据生成与划分锁在 `fnfit/world.py` + `fixtures/fn_fit/protocol.json`。
 
-**参考（模式，不是业务）：** Pi 自带 `bash` 工具；本包是「有实验 id 的 bash」。不要去抄 `n9_agent` 的 9N 提交。
+通用 `cwd + command + ssh` **还没有**；不要把 bash 训练塞进本包。
 
 **间隙：**
 
-- 不 `append` JSONL。  
+- 不 `import expmem`，不 `append` JSONL。  
 - 不知道 BM25。  
-- 删掉 `.pi/extensions/run` 后，P1 记忆包回归必须通过。
+- `collection` 不是 `fn_fit` → `ok=false`。  
+- 删掉 `.pi/extensions/fnfit` 后，P1 记忆包回归必须通过。
 
-**本工具验收（假命令）：**
+**本工具验收：**
 
 ```text
-create → run(command="echo fake") → complete
-JSONL 仍一条；run 的 log 不进 experiments.jsonl
+create planned 节点 → run_experiment(...) → JSONL hash 不变、status 仍 planned
+再 complete_experiment(metrics) → status=done
+poly degree 3 + features=all → 拒绝（CPU 边界）
 ```
+
+测试：`tools/fnfit/tests/test_fnfit.py`；隔离 `tests/packs/test_fnfit_isolation.py`。
 
 ---
 
@@ -328,16 +332,16 @@ search_experiments  ←读─ JSONL ─写→ create / complete
         │                         │
         │ 不调用                  │ upsert 不改 change
         ▼                         ▼
-      viz 只读                 run 只跑进程
+      viz 只读                 fnfit 只拟合（不写 JSONL）
 ```
 
 | 若改了… | 允许波及 | 禁止波及 |
 |---------|----------|----------|
-| BM25 / tokenize | search、create 去重 | papers API、viz 布局、run |
+| BM25 / tokenize | search、create 去重 | papers API、viz 布局、fnfit |
 | arXiv URL | 仅 search_papers | JSONL 行数 |
 | viz CSS | 仅 HTML | 任何 Python 测试 |
 | complete 写 actual | card 展示 | search 的命中 id 集合 |
-| 删除 run 包 | 无 | expmem 四工具 |
+| 删除 fnfit 包 | 无 | expmem 四工具 |
 
 ---
 
@@ -352,7 +356,7 @@ search_experiments  ←读─ JSONL ─写→ create / complete
 | I3 | create ⊥ papers 网 | 断网仍能 create baseline |
 | I4 | complete ⊥ 检索语料 | complete 前后同一 query 的 id 集合相等 |
 | I5 | viz ⊥ 写入 | 打开图前后 jsonl hash 不变 |
-| I6 | 拔插 | 移走 `.pi/extensions/viz` 与 `run`，I2–I4 仍过 |
+| I6 | 拔插 | 移走 `.pi/extensions/viz` 与 `fnfit`，I2–I4 仍过 |
 | I7 | 无 n9 | `rg n9_agent\|tritium\|xingtu` 在 `tools/` 与 `.pi/` 为 0 |
 
 现成可直接搬的测试：

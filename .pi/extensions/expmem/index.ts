@@ -3,7 +3,7 @@
  * Spawn only. Business logic stays in tools/expmem.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,23 @@ function resolvePython(): string {
 	return process.platform === "win32" ? "python" : "python3";
 }
 
+function readLabSession(): { lab?: string } {
+	const p = join(repoRoot(), ".pi", "lab-session.json");
+	if (!existsSync(p)) return {};
+	try {
+		return JSON.parse(readFileSync(p, "utf8")) as { lab?: string };
+	} catch {
+		return {};
+	}
+}
+
+function dataRoot(): string {
+	if (process.env.EXPMEM_ROOT) return process.env.EXPMEM_ROOT;
+	const bound = (readLabSession().lab || "").trim();
+	if (bound) return bound;
+	return join(repoRoot(), "expmem_data");
+}
+
 function pythonPath(): string {
 	const src = join(repoRoot(), "tools", "expmem", "src");
 	const prev = process.env.PYTHONPATH || "";
@@ -38,7 +55,7 @@ function pythonPath(): string {
 
 function invoke(action: string, params: Record<string, unknown>, project: string): string {
 	const python = resolvePython();
-	const root = process.env.EXPMEM_ROOT || join(repoRoot(), "expmem_data");
+	const root = dataRoot();
 	const runner = join(repoRoot(), "tools", "expmem", "run.py");
 	const proc = spawnSync(
 		python,
@@ -58,6 +75,7 @@ function invoke(action: string, params: Record<string, unknown>, project: string
 			encoding: "utf-8",
 			env: {
 				...process.env,
+				EXPMEM_ROOT: root,
 				PYTHONPATH: pythonPath(),
 				PYTHONUTF8: "1",
 				PYTHONIOENCODING: "utf-8",

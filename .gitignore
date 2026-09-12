@@ -13,3 +13,4 @@ build/
 experiments/
 !experiments/.gitkeep
 expmem_data/
+.pi/lab-session.json

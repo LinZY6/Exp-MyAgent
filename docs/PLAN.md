@@ -92,29 +92,35 @@
 
 ### P1 — Agent skill（必做，行为核）
 
-`.pi/skills/experiment-agent/SKILL.md` 写死顺序：
+`.pi/skills/experiment-agent/SKILL.md`：LLM 看完指标自己选下一刀（不是 Python 队列）。顺序：
 
 ```text
-search_papers? → search_experiments → （撞车则停）→ create_experiment
-→ 人/run 去训练 → complete_experiment
+search_papers? → search_experiments → （撞车则换想法）→ create_experiment
+→ run → complete → 根据指标再选下一刀，直到平台期/噪声地板/本轮上限
 ```
 
-并写：换项目只换 `collection`；不要扫 JSONL；不要为了「跑完一轮」而连发 create。
+一条节点必须 run+complete 后才能 create 下一条。不要扫 JSONL。不要为了「列菜单」而停下来问用户选 1/2/3。
 
 ### P2 — `viz`（可选包）
 
 - `/viz` 或工具 `open_experiment_graph`：起 `python -m expmem viz` 或打开 `viz/index.html`。  
 - 只读 expmem JSONL，不另做一套库。
 
-### P3 — `run`（可选包，后做）
+### P3 — `run` / 可执行世界
 
-单独 extension，例如 `run_experiment`：
+第一份落地是 **fnfit**（`.pi/extensions/fnfit`），不是通用 SSH：
 
-- 输入：`experiment_id`、工作目录、命令或 SSH 目标。  
-- 输出：exit / log 路径。成功后 Agent **再调** `complete_experiment`。  
-- 本机命令与 SSH 做成同一接口的两个 backend，可只装其中一个。
+- 工具 `run_experiment`：在冻结的 Friedman #1 划分上拟合 `ols|ridge|poly`。  
+- 输入：`experiment_id` + 结构化 knobs。输出：`metrics`（`test_mse` 等）。  
+- **不写** JSONL；Agent 再调 `complete_experiment`。  
+- 无 numpy；vendor 嵌入式 CPython 即可，单次 < 100ms。
 
-**P3 不做完，Agent 已经能用**：训练用你自己的脚本，Pi 里只记计划与结果。
+通用 `cwd + command + ssh` 仍可另开包，不要和 fnfit 抢同一个 tool 名。
+
+### P3.5 — 任务队列（记忆，不是调度器）
+
+`.pi/extensions/queue`：`queue_put` / `list` / `set` / `take`。文件 `<lab>/task_queue.json`。  
+LLM 做完 A 后自己改优先级、插入 D，再 `queue_take`。禁止 Python `while True: take(); run()`。
 
 ### 以后可再插
 
