@@ -24,7 +24,14 @@ Do not edit the MyAgent repo CHARTER.md from this session. This file is the task
 Ledger: `fn_fit/experiments.jsonl` under this folder (`EXPMEM_ROOT` = this folder).
 Code the Agent may edit: `src/fnfit/fit.py`, `world.py`, `linalg.py`. Do not edit `src/fnfit/tools.py` unless you mean to change the tool API.
 
-The Agent iterates on its own: after each complete, it chooses the next change and runs it. Stop at a test_mse plateau, overfit wall (train_mse well below noise ~1.0 while test_mse does not improve), or 8 new nodes this session.
+The Agent iterates on its own: the Experiment Designer proposes from CHARTER + DIRECTIONS.md + DAG + papers; the Experimenter runs the queue. Do not treat 8 new nodes as a campaign-stop.
+"""
+
+DIRECTIONS = """# User directions (this lab)
+
+Designer reads this **every** time they propose or clarify. Append a dated note when the user states a goal or constraint. Do not copy Charter freeze fields here (task / dataset / split / primary metric stay in CHARTER.md).
+
+- (init) Follow this lab's CHARTER.md.
 """
 
 README = """# This is an experiment lab
@@ -34,6 +41,7 @@ Pi still starts from the MyAgent repo (so search/create/run tools load). This fo
 ```text
 protocol.json              # human contract
 CHARTER.md                 # task freeze for this lab
+DIRECTIONS.md              # extra user instructions for the Designer
 src/fnfit/fit.py           # edit models here
 src/fnfit/world.py         # edit data/split/metrics here
 fn_fit/experiments.jsonl   # database (create/complete write here)
@@ -46,7 +54,7 @@ Launch:
 .\\lab.cmd <folder> -a
 ```
 
-`run_experiment` imports `src/` first when `EXPERIMENT_LAB` points here. Existing JSONL is never overwritten by init.
+`run_experiment` imports `src/` first when `EXPERIMENT_LAB` points here. Existing JSONL is never overwritten by init. New labs start with an **empty** ledger unless you pass `--seed` / `use_lab(seed=true)` (Friedman #1 demo only).
 """
 
 
@@ -58,7 +66,7 @@ def copy_if_absent(src: Path, dest: Path) -> bool:
     return True
 
 
-def init_lab(lab: Path, *, repo: Path, empty: bool = False) -> dict:
+def init_lab(lab: Path, *, repo: Path, empty: bool = True) -> dict:
     lab = lab.resolve()
     lab.mkdir(parents=True, exist_ok=True)
     pack_src = repo / "tools" / "fnfit" / "src" / "fnfit"
@@ -101,6 +109,12 @@ def init_lab(lab: Path, *, repo: Path, empty: bool = False) -> dict:
     else:
         skipped.append("CHARTER.md")
 
+    if not (lab / "DIRECTIONS.md").exists():
+        (lab / "DIRECTIONS.md").write_text(DIRECTIONS, encoding="utf-8")
+        copied.append("DIRECTIONS.md")
+    else:
+        skipped.append("DIRECTIONS.md")
+
     readme_path = lab / "README.md"
     if not readme_path.exists():
         readme_path.write_text(README.replace("{lab}", str(lab)), encoding="utf-8")
@@ -132,10 +146,21 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Init an fn_fit lab folder")
     p.add_argument("--lab", required=True, help="folder for code + ledger")
     p.add_argument("--repo", default="", help="MyAgent repo root")
-    p.add_argument("--empty", action="store_true", help="start with an empty JSONL")
+    p.add_argument(
+        "--empty",
+        action="store_true",
+        default=True,
+        help="start with an empty JSONL (default; do not copy the Friedman demo DAG)",
+    )
+    p.add_argument(
+        "--seed",
+        action="store_true",
+        help="copy fixtures/fn_fit/experiments.jsonl (Friedman #1 7-node demo)",
+    )
     args = p.parse_args(argv)
     repo = Path(args.repo).resolve() if args.repo else Path(__file__).resolve().parents[2]
-    out = init_lab(Path(args.lab), repo=repo, empty=bool(args.empty))
+    empty = not bool(args.seed)
+    out = init_lab(Path(args.lab), repo=repo, empty=empty)
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0
 

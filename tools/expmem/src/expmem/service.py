@@ -52,7 +52,9 @@ class ExperimentLab:
                 "ok": False,
                 "error": str(e),
                 "hits": [],
-                "hint": "offline or arXiv unreachable; pass papers= manually into create",
+                "hint": "Atom search only. Do not retry search_papers in a loop or in parallel. "
+                "Call fetch_paper with a known arXiv id, or random_paper. "
+                "Do not scrape arxiv.org/search HTML.",
             }
 
     def retrieve(

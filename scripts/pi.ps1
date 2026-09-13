@@ -57,9 +57,9 @@ function Resolve-LabPath([string]$lab) {
     return [IO.Path]::GetFullPath((Join-Path (Join-Path $Root "experiments") $norm))
 }
 
-# Strip --lab / --empty-lab so Pi's CLI does not see them.
+# Strip --lab / --empty-lab / --seed-lab so Pi's CLI does not see them.
 $LabName = $null
-$EmptyLab = $false
+$SeedLab = $false
 $PiArgsList = New-Object System.Collections.ArrayList
 $rawArgs = @($args)
 if ($rawArgs.Count -ge 1 -and [string]$rawArgs[0] -eq "--") {
@@ -77,7 +77,10 @@ for ($i = 0; $i -lt $rawArgs.Count; $i++) {
         continue
     }
     if ($a -eq "--empty-lab") {
-        $EmptyLab = $true
+        continue
+    }
+    if ($a -eq "--seed-lab") {
+        $SeedLab = $true
         continue
     }
     [void]$PiArgsList.Add($rawArgs[$i])
@@ -148,7 +151,7 @@ if ($LabName) {
     $LabPath = Resolve-LabPath $LabName
     $init = Join-Path $Root "tools\fnfit\init_lab.py"
     $initArgs = @($init, "--lab", $LabPath, "--repo", $Root)
-    if ($EmptyLab) { $initArgs += "--empty" }
+    if ($SeedLab) { $initArgs += "--seed" } else { $initArgs += "--empty" }
     & $Py @initArgs
     if ($LASTEXITCODE -ne 0) { throw "init_lab failed for $LabPath" }
     $env:EXPERIMENT_LAB = $LabPath

@@ -120,6 +120,26 @@ def test_fetch_then_search_and_read(tmp_path: Path):
     assert read["n_lines"] <= MAX_READ_LINES
 
 
+def test_atom_timeout_still_fetches_html(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir(exist_ok=True)
+
+    def get(url: str):
+        if "export.arxiv.org" in url:
+            raise ConnectionError("curl: (28) Operation timed out")
+        if "/html/" in url:
+            return 200, HTML.encode("utf-8"), "text/html"
+        return 404, b"", "not found"
+
+    out = fetch_paper(
+        {"paper_id": "1706.03762", "root": str(tmp_path / "papers"), "repo": str(repo)},
+        repo=repo,
+        get=get,
+    )
+    assert out["ok"] is True
+    assert out["n_lines"] > 5
+
+
 def test_read_without_fetch_fails(tmp_path: Path):
     repo = tmp_path / "repo"
     repo.mkdir(exist_ok=True)
@@ -150,6 +170,7 @@ if __name__ == "__main__":
         p = Path(d)
         test_read_cap(p)
         test_fetch_then_search_and_read(p)
+        test_atom_timeout_still_fetches_html(p)
         test_read_without_fetch_fails(p)
         test_random_paper_fetches_without_user_id(p)
     print("ok tools/papers/tests/test_papers.py")

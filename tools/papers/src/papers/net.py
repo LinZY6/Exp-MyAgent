@@ -82,10 +82,17 @@ def _curl_get(url: str, timeout: int) -> tuple[int, bytes, str]:
 
 def get(url: str, *, timeout: int = 30) -> tuple[int, bytes, str]:
     last_err: Exception | None = None
-    for attempt in range(2):
+    last_resp: tuple[int, bytes, str] = (0, b"", "")
+    for attempt in range(4):
         try:
             code, body, ctype = _urllib_get(url, timeout)
-            if code in {502, 503, 504} and attempt == 0:
+            last_resp = (code, body, ctype)
+            if code == 429:
+                if attempt == 3:
+                    return code, body, ctype
+                time.sleep(3 * (attempt + 1))
+                continue
+            if code in {502, 503, 504} and attempt < 3:
                 time.sleep(1.2)
                 continue
             return code, body, ctype
@@ -95,10 +102,10 @@ def get(url: str, *, timeout: int = 30) -> tuple[int, bytes, str]:
                 return _curl_get(url, timeout)
             except (ConnectionError, OSError, subprocess.SubprocessError, TimeoutError) as e2:
                 last_err = e2
-                if attempt == 0:
+                if attempt < 3:
                     time.sleep(0.8)
                     continue
                 raise ConnectionError(str(last_err)) from e2
     if last_err:
         raise ConnectionError(str(last_err))
-    return 0, b"", ""
+    return last_resp

@@ -117,8 +117,11 @@ def random_paper(params: dict[str, Any], *, repo: Path, get: GetFn | None = None
 
 def _atom_meta(paper_id: str, get: GetFn) -> dict[str, str]:
     url = f"https://export.arxiv.org/api/query?id_list={paper_id}&max_results=1"
-    code, body, _ = get(url)
     out = {"title": "", "summary": "", "url": f"https://arxiv.org/abs/{paper_id}"}
+    try:
+        code, body, _ = get(url)
+    except ConnectionError:
+        return out
     if code != 200 or not body:
         return out
     root = ET.fromstring(body)

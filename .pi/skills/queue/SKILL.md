@@ -14,7 +14,8 @@ Higher `priority` is taken first.
 ## Loop
 
 ```text
-Designer queue_put (A,B,C)     # only when nothing is queued
+Designer queue_put (A,B,C)     # reads DIRECTIONS.md + DAG + papers
+If a step is unclear → Designer clarify, then Experimenter continues
 Experimenter queue_take → create → run → complete
 queue_set that id status=done (and experiment_id)
 still queued → Experimenter queue_take
@@ -28,4 +29,4 @@ If `queue_take` returns `already_running`, finish or `queue_set` skip/done that 
 
 `blocked_on` = needs lab code (e.g. MARS). Experimenter unblocks after editing `fit.py`, then `status=queued`. The idea itself stays the Designer’s.
 
-Divergence Reviewer (`.pi/skills/divergence-reviewer/SKILL.md`) may `queue_put` leftovers only. It must not `queue_take` and must not treat an empty queue as campaign stop. After it writes `enqueue`, the Experimenter must `campaign_gate` then `queue_take` the same turn — leftover queue is remaining work, not a wait-for-user checkpoint.
+If a taken task’s `change` / knobs are unclear, the Experimenter asks the Designer (`designer-clarify-<id>`), then continues. Do not ask the user what the step meant.

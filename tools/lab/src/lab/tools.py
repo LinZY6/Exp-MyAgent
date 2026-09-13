@@ -86,7 +86,9 @@ def use_lab(params: dict[str, Any]) -> dict[str, Any]:
     init = repo / "tools" / "fnfit" / "init_lab.py"
     py = sys.executable
     cmd = [py, str(init), "--lab", report["resolved"], "--repo", str(repo)]
-    if params.get("empty"):
+    if params.get("seed") and not params.get("empty"):
+        cmd.append("--seed")
+    else:
         cmd.append("--empty")
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0:
@@ -103,7 +105,7 @@ def use_lab(params: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "lab": report["resolved"],
         "collection": "fn_fit",
-        "empty": bool(params.get("empty")),
+        "empty": not (bool(params.get("seed")) and not params.get("empty")),
     }
     save_session(repo, payload)
     return {

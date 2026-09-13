@@ -81,11 +81,17 @@ const useLab = defineTool({
 		"Inspect or bind a folder for this project (code + experiments.jsonl). " +
 		"First call WITHOUT force: safety check only; show the resolved path and wait for the user to say yes. " +
 		"Second call with force=true actually creates/binds. Never invent a path. " +
-		"Relative names go under experiments/<name> in the repo.",
+		"Relative names go under experiments/<name> in the repo. " +
+		"Ledger starts empty. Do not pass seed=true unless this lab is the Friedman #1 demo.",
 	parameters: Type.Object({
 		path: Type.String({ description: "Folder the user named (absolute, or a short name)" }),
 		force: Type.Optional(Type.Boolean({ description: "true only after the user explicitly confirms the resolved path" })),
-		empty: Type.Optional(Type.Boolean({ description: "start with an empty ledger instead of the 7-node seed" })),
+		empty: Type.Optional(Type.Boolean({ description: "empty ledger (default). New labs must stay empty." })),
+		seed: Type.Optional(
+			Type.Boolean({
+				description: "copy the Friedman #1 7-node demo DAG. Only for a Friedman demo lab, never a new task.",
+			}),
+		),
 	}),
 	async execute(_id, input) {
 		return asResult(invoke({ action: "use_lab", ...input }));

@@ -10,7 +10,7 @@ When the user describes a **new project** (new function, new dataset, "在某某
 1. **Ask which folder.** Do not invent `F:\...` or `experiments\foo`. Do not start create/run yet.
 2. After they name a folder, call `use_lab` **without** `force`. Show them `resolved`, `safe`, `entries`, and any `error`.
 3. Wait for an explicit yes ("就这个" / "确认" / "用这个目录").
-4. Call `use_lab` again with the same path and `force=true`. That writes this lab's CHARTER / src / jsonl. Do **not** edit the repo `CHARTER.md`.
+4. Call `use_lab` again with the same path and `force=true`. That writes this lab's CHARTER / src / **empty** jsonl. Do **not** pass `seed=true` unless the user asked for the Friedman #1 demo DAG. Do **not** edit the repo `CHARTER.md`.
 5. Then follow `.pi/agents/ROSTER.md`: Designer fills the queue only when it is empty; Experimenter takes and runs. Do not ask which experiment to try. Divergence is only for campaign-stop. The ledger is `<lab>/fn_fit/experiments.jsonl`.
 
 ## Bounds (every edit)

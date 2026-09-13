@@ -13,7 +13,7 @@ description: Hard lab-boundary and protocol freeze checks (not an LLM reviewer).
 
 1. `assert_lab_path` 目标路径。`in_lab=false` → 停。
 2. 禁止读或编辑：仓库 `.env`、`.vendor`、lab 外任何目录、其它 collection 的 jsonl。
-3. 允许写：`<lab>/src/...`（用户点名的模型代码）、`<lab>/reviews/`、本 lab 的队列文件。
+3. 允许写：`<lab>/src/...`（用户点名的模型代码）、`<lab>/reviews/`、本 lab 的队列文件、`<lab>/DIRECTIONS.md`（只追加用户口头约束，不改 Charter 冻结栏）。
 4. **不要**改仓库根 `CHARTER.md`。改本 lab 的任务/数据/主指标必须用户口头同意。
 
 ## 冻结（未获用户允许不得改）

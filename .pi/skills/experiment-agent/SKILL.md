@@ -26,7 +26,7 @@ If no lab is bound (`lab_status` → `bound: false`):
 
 Once bound, read **this lab's** `CHARTER.md`. Do not silently change task / dataset / primary metric, and do not edit the repo charter.
 
-If the queue has no `queued` item, **switch to Experiment Designer** (packet + `.pi/skills/experiment-designer/SKILL.md`). Do not invent the first batch yourself.
+If the queue has no `queued` item, **switch to Experiment Designer**. The packet must include `DIRECTIONS.md` (create it if missing), DAG summary, and the list of downloaded papers. Do not invent the first batch yourself.
 
 Treat Charter **knobs** as the **current runner interface**. A Designer item with `blocked_on` means you implement that capability in-lab, then `queue_set status=queued`.
 
@@ -48,14 +48,18 @@ about to stop → campaign_gate; if empty, Divergence
 
 Python must never loop `take`+`run`. You call the tools one step at a time after seeing results.
 
-If a taken task is `blocked` or needs new code: `assert_lab_path` → edit in-lab `fit.py` → `lab_code_hash` → Patch Reviewer (`code_sha256` in the new approve) → `protocol_check` → `queue_set status=queued` and take it. An older patch approve does not cover a later edit. Do not replace the Designer’s `change` with a different idea while implementing.
+If a taken task is unclear (missing knobs, ambiguous `change`): **ask the Designer**, do not ask the user, and do not invent a different experiment. Write `<lab>/reviews/packets/designer-clarify-<taskid>.md` with the task + one sentence of what is unclear, then follow `.pi/skills/experiment-designer/SKILL.md` clarify. After `designer-clarify-*.json`, continue take/run.
+
+If the user states a new constraint or goal while a lab is bound: append a dated note to `<lab>/DIRECTIONS.md` (after `assert_lab_path`). Do not silently change CHARTER freeze fields. If that note conflicts with the current queue, switch to Designer; otherwise keep taking.
+
+If a taken task is `blocked` or needs new code: `assert_lab_path` → edit in-lab `fit.py` → `lab_code_hash` → Patch Reviewer (`code_sha256` in the new approve) → `protocol_check` → `queue_set status=queued` and take it. An older patch approve does not cover a later edit. Do not replace the Designer’s `change` with a different idea while implementing. If the Designer’s step is unclear, clarify first (above), then implement.
 
 1. `queue_take` (or peek). `empty=true` is **not** a stop: switch to Designer. If the result lists `blocked`, implement those; do not call Designer yet.
 2. **Design Reviewer** (packet + `.pi/skills/design-reviewer/SKILL.md`). `reject` → `queue_set skipped` (or hand back to Designer); do not create.
 3. If `papers=` is a real citation → **Paper Reviewer**. `mismatch` → do not claim reproduction.
 4. Duplicate `kind`+`change` → `queue_set status=skipped`, take the next item.
 5. `create_experiment` + `run_experiment` + `complete_experiment`. Attach `experiment_id` on the queue item.
-6. If the queue still has `queued` items, `queue_take` the next **this turn**. Call Designer only when there is no `queued` item. Do not ask “要我接着跑哪一个”. Do not `queue_put` the follow-up yourself.
+6. If the queue still has `queued` items, `queue_take` the next **this turn**. Call Designer only when there is no `queued` item, or when this step is unclear (clarify), or when `DIRECTIONS.md` just changed the goal. Do not ask “要我接着跑哪一个”. Do not `queue_put` the follow-up yourself.
 
 Never end a turn with only a status report, round summary, or 「要继续就说一声」. Call `ask_user` if you think you must speak to the user; if it returns `allowed: false`, do `must` instead. Unless `campaign_gate` returned `may_stop: true`, this turn must end by calling a tool (`queue_take`, Designer `queue_put`, implement-blocked, or Divergence if you were writing a stop report).
 
@@ -63,7 +67,7 @@ Never end a turn with only a status report, round summary, or 「要继续就说
 
 1. Write the whitelist packet under `<lab>/reviews/packets/` (`.pi/agents/PACKET.md`).
 2. `read` only that role’s `SKILL.md`.
-3. Designer: `queue_put` then drop the role. Reviewer: verdict JSON under `<lab>/reviews/verdicts/`.
+3. Designer proposing: `queue_put` then drop the role. Designer clarifying: write `designer-clarify-*.json` then drop. Reviewer: verdict JSON under `<lab>/reviews/verdicts/`.
 4. Drop that mode. Do not carry the Experimenter’s “we are done” story into Divergence.
 
 ## Stop boundaries

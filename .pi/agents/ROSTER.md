@@ -8,7 +8,7 @@
 
 | 问题 | 谁 |
 |------|----|
-| 下一刀试什么、优先级多少 | **实验设计者** |
+| 下一刀试什么、某一刀是什么意思 | **实验设计者**（必须看见用户指令、DAG、论文） |
 | 跑拟合、改 `fit.py`、建 DAG 节点 | **实验者** |
 | 这一刀能不能 `create`（Charter / 重复） | **设计审查** |
 | 刚改的代码对不对 | **补丁审查** |
@@ -22,8 +22,8 @@
 
 | 角色 | 一句话 | 产出 | 何时上场 | 允许 | 禁止 |
 |------|--------|------|----------|------|------|
-| 实验设计者 `experiment-designer` | 把还没做的实验写成队列 | `queue_put`（`proposed_by=experiment-designer`） | **没有** `queued` 项时（开场、跑空、轴死换方向） | `queue_put` / `queue_list` / 改优先级的 `queue_set` / 查论文防重复 | take、run、complete、改 `fit.py`、场停 |
-| 实验者 `experimenter` | 把队列上的活做完 | DAG 节点 + 指标 | 有 `queued` 就 take；只有 `blocked` 就改代码解锁 | take、run、complete、改 lab 代码、簿记用 `queue_set`（status / experiment_id / 解开 blocked） | **出方案**（`queue_put`、改 title/spec/优先级） |
+| 实验设计者 `experiment-designer` | 读指令+DAG+论文，出方案；也可解释某一刀 | `queue_put` 或 `designer-clarify-*.json` | 队列空 / 轴死 / 实验者问「这刀什么意思」 / 用户指令更新 | `queue_put`、论文切片、查重 | take、run、complete、改 `fit.py`、场停 |
+| 实验者 `experimenter` | 把队列上的活做完 | DAG 节点 + 指标 | 有 `queued` 就 take；只有 `blocked` 就改代码解锁；看不懂某一刀就问设计者 | take、run、complete、改 lab 代码、簿记 `queue_set` | **出方案**（`queue_put`、改 title/spec/优先级）；看不懂时不要问用户、不要自己编 |
 | 设计审查 `design-reviewer` | 这一刀该不该 create | `reviews/verdicts/design-*.json` | `create_experiment` **之前**，每刀一次 | 读材料包 + 写 verdict | 出方案、take、run、改代码 |
 | 补丁审查 `patch-reviewer` | 这次 diff 是否只实现了声明的 change | `reviews/verdicts/patch-*.json`（必须带当前 `code_sha256`） | **改了** lab 代码之后、run 之前 | `lab_code_hash` + 写 verdict | 自己改代码、run、take |
 | 论文对照 `paper-reviewer` | 和声称的那篇是否对得上 | `reviews/verdicts/paper-*.json` | 节点写了真实 `papers=` 时 | 论文切片工具 + 写 verdict | 通读 `paper.txt`、出方案、run |
@@ -41,10 +41,11 @@
   → 实验者 queue_take
   → 协议闸门
   → 设计审查
-  → 若声称按论文：论文对照
+  → 若这一刀声称按论文：论文对照
   → 若刚改代码：补丁审查
+  → 实验者看不懂这一刀：问设计者 clarify，再继续
   → 实验者 create / run / complete / queue_set done
-  → 还有 queued：继续 take（不要把设计者叫回来）
+  → 还有 queued：继续 take（不要为了「下一刀试什么」把设计者叫回来）
   → 只有 blocked：实验者改代码、解锁、再 take（queue_take 报空但带 blocked ≠ 场停）
   → 又空了：设计者再填，不要自己编，也不要向用户收工
 

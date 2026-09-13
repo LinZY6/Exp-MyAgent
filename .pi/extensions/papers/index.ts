@@ -90,9 +90,9 @@ const randomPaper = defineTool({
 	name: "random_paper",
 	label: "Random arXiv paper",
 	description:
-		"Pick a random arXiv paper, download it for you, and return title/outline — not the body. " +
-		"You do not need a paper_id or a local PDF. Optional query or category (default cs.LG). " +
-		"Then read_paper(section='Abstract').",
+		"Pick a random arXiv paper and download it into the current lab papers/ folder. " +
+		"Vendor Python has network. Do not scrape arxiv.org/search. " +
+		"Returns title/outline, not the body. Then read_paper(section='Abstract').",
 	parameters: Type.Object({
 		query: Type.Optional(Type.String({ description: "Topic keywords, e.g. ridge regression" })),
 		category: Type.Optional(Type.String({ description: "arXiv category, e.g. cs.LG or stat.ML" })),
@@ -106,9 +106,11 @@ const fetchPaper = defineTool({
 	name: "fetch_paper",
 	label: "Fetch paper full text",
 	description:
-		"Download one arXiv paper to the lab papers/ folder and extract text. " +
+		"Download one arXiv paper to the current lab papers/ folder (HTTPS HTML/PDF). " +
+		"Vendor Python has network. 429 on search_papers does not block this tool. " +
+		"Do not scrape arxiv.org/search or write a lab-local fetcher. " +
 		"Returns title, abstract, outline, line count — NEVER the full body. " +
-		"Then use paper_outline / search_paper / read_paper. Do not Pi-read paper.txt whole.",
+		"Then paper_outline / search_paper / read_paper. Do not Pi-read paper.txt whole.",
 	parameters: Type.Object({
 		paper_id: Type.String({ description: "arXiv id, e.g. 1706.03762 or arxiv:1706.03762" }),
 		force: Type.Optional(Type.Boolean({ description: "Re-download even if cached" })),

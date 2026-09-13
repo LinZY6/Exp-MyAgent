@@ -29,7 +29,7 @@ Use a **private lab folder** (your code + ledger). You can name the folder **in 
 .\lab.cmd my-run -a
 .\lab.cmd F:\work\fnlab -a
 .\pi.cmd -a --lab my-run
-.\pi.cmd -a --lab F:\work\fnlab --empty-lab
+.\pi.cmd -a --lab F:\work\fnlab
 ```
 
 Relative names land in `experiments\<name>` (gitignored). Pi still runs from this repo so tools load. Ledger is `<lab>\fn_fit\experiments.jsonl`. Edit `<lab>\src\fnfit\fit.py`.

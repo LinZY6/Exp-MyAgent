@@ -6,7 +6,7 @@ Once a lab is bound, the **campaign loop** (`.pi/extensions/campaign/`) re-enter
 
 Pi owns conversation, read/grep/edit, and shell. Domain tools live in `.pi/extensions/` (expmem first). Project direction lives in `CHARTER.md`; do not silently change the task, dataset, or primary metric.
 
-Who does what: `.pi/agents/ROSTER.md` (one job per hat). Prompts: `.pi/skills/<role>/SKILL.md`. Reviewers are extra prompts and whitelist packets. Only the Experimenter runs fits; only the Experiment Designer proposes the next idea.
+The **Experiment Designer** proposes from CHARTER + DIRECTIONS.md + DAG + papers (`queue_put`). Reviewers are extra prompts and whitelist packets. Only the Experimenter runs fits. If a queued step is unclear, the Experimenter asks the Designer — not the user.
 
 ## Rules
 

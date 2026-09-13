@@ -57,6 +57,7 @@ function invoke(action: string, params: Record<string, unknown>, project: string
 	const python = resolvePython();
 	const root = dataRoot();
 	const runner = join(repoRoot(), "tools", "expmem", "run.py");
+	const timeoutMs = action === "search_papers" ? 25_000 : 60_000;
 	const proc = spawnSync(
 		python,
 		[
@@ -81,7 +82,7 @@ function invoke(action: string, params: Record<string, unknown>, project: string
 				PYTHONIOENCODING: "utf-8",
 			},
 			maxBuffer: 8 * 1024 * 1024,
-			timeout: 60_000,
+			timeout: timeoutMs,
 			windowsHide: true,
 		},
 	);
@@ -112,8 +113,10 @@ const searchPapers = defineTool({
 	name: "search_papers",
 	label: "Search papers",
 	description:
-		"Search arXiv for external literature (not the experiment DB). " +
-		"After a hit, still call search_experiments before creating a node.",
+		"Search arXiv Atom API for title/abstract (not the experiment DB). Often 429/timeout. " +
+		"Call at most once per turn; never fire several search_papers in parallel. " +
+		"On 429/timeout/irrelevant hits, stop searching and fetch_paper a known id or random_paper. " +
+		"Do not scrape arxiv.org/search HTML.",
 	parameters: Type.Object({
 		query: Type.String({ description: "arXiv search query" }),
 		limit: Type.Optional(Type.Number({ description: "Max hits, default 5" })),
