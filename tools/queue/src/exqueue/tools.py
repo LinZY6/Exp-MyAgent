@@ -9,6 +9,9 @@ from typing import Any
 
 from exqueue.store import QUEUE_NAME, STATUSES, load, new_id, ranked, save, utc_now
 
+PUTTERS = ("experiment-designer", "divergence-reviewer")
+SCHEME_KEYS = ("priority", "title", "reason")
+
 REPO = Path(__file__).resolve().parents[4]
 
 
@@ -52,6 +55,24 @@ def _spec(params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _proposed_by(params: dict[str, Any]) -> str:
+    return str(params.get("proposed_by") or "").strip()
+
+
+def _require_putter(params: dict[str, Any]) -> dict[str, Any] | None:
+    who = _proposed_by(params)
+    if who not in PUTTERS:
+        return {
+            "ok": False,
+            "error": (
+                "queue_put requires proposed_by=experiment-designer "
+                "(or divergence-reviewer for leftover audit). "
+                "The experimenter must not enqueue a new plan."
+            ),
+        }
+    return None
+
+
 def list_tasks(params: dict[str, Any]) -> dict[str, Any]:
     lab = _lab_dir(params)
     tasks = load(lab)
@@ -69,6 +90,9 @@ def list_tasks(params: dict[str, Any]) -> dict[str, Any]:
 
 def put(params: dict[str, Any]) -> dict[str, Any]:
     lab = _lab_dir(params)
+    blocked = _require_putter(params)
+    if blocked:
+        return blocked
     title = str(params.get("title") or params.get("change") or "").strip()
     if not title:
         return {"ok": False, "error": "title or change required"}
@@ -76,9 +100,11 @@ def put(params: dict[str, Any]) -> dict[str, Any]:
     tid = str(params.get("id") or "").strip() or new_id()
     existing = next((t for t in tasks if t.get("id") == tid), None)
     spec = _spec(params)
+    who = _proposed_by(params)
     if existing:
         existing["title"] = title
         existing["priority"] = _as_int(params.get("priority"), int(existing.get("priority") or 100))
+        existing["proposed_by"] = who
         if params.get("reason") not in (None, ""):
             existing["reason"] = str(params.get("reason"))
         if params.get("note") not in (None, ""):
@@ -98,6 +124,7 @@ def put(params: dict[str, Any]) -> dict[str, Any]:
         "reason": str(params.get("reason") or ""),
         "note": str(params.get("note") or ""),
         "spec": spec,
+        "proposed_by": who,
         "experiment_id": str(params.get("experiment_id") or ""),
         "blocked_on": str(params.get("blocked_on") or ""),
         "created_at": utc_now(),
@@ -119,6 +146,17 @@ def set_task(params: dict[str, Any]) -> dict[str, Any]:
     task = next((t for t in tasks if t.get("id") == tid), None)
     if not task:
         return {"ok": False, "error": f"not found: {tid}"}
+    scheme = any(params.get(k) not in (None, "") for k in SCHEME_KEYS) or bool(_spec(params))
+    if scheme:
+        blocked = _require_putter(params)
+        if blocked:
+            blocked["error"] = (
+                "changing title/spec/priority is the Designer's plan; "
+                "pass proposed_by=experiment-designer (or divergence-reviewer). "
+                "The experimenter may only set status, experiment_id, note, blocked_on."
+            )
+            return blocked
+        task["proposed_by"] = _proposed_by(params)
     if params.get("priority") not in (None, ""):
         task["priority"] = _as_int(params.get("priority"), 0)
     if params.get("status") not in (None, ""):
@@ -154,7 +192,30 @@ def take(params: dict[str, Any]) -> dict[str, Any]:
         }
     queued = ranked(tasks, status="queued")
     if not queued:
-        return {"ok": True, "taken": None, "empty": True, "lab": str(lab), "hint": "queue is empty"}
+        blocked = ranked(tasks, status="blocked")
+        if blocked:
+            return {
+                "ok": True,
+                "taken": None,
+                "empty": False,
+                "blocked": blocked,
+                "lab": str(lab),
+                "hint": (
+                    "no queued items but blocked work remains; implement blocked_on, "
+                    "queue_set status=queued, then take. Not a campaign-stop."
+                ),
+            }
+        return {
+            "ok": True,
+            "taken": None,
+            "empty": True,
+            "lab": str(lab),
+            "hint": (
+                "no queued or blocked items; this is not a campaign-stop. "
+                "Switch to Experiment Designer (queue_put). "
+                "Call Divergence only if you were about to write a stop report."
+            ),
+        }
     top = queued[0]
     if not peek:
         top["status"] = "running"

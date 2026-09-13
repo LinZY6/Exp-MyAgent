@@ -1,28 +1,59 @@
-# Agent roster
+# 角色总表
 
-提示词就是各角色的 `SKILL.md`。检查时打开下表路径即可。这不是 Python 调度器：审查结果写回磁盘，仍由 **Experimenter** 决定 create / run / 停。
+同一时刻只戴一顶帽子。先看这张表，再打开对应 `SKILL.md`。这不是 Python 调度器。
 
-| 角色 | 英文 id | 提示词（请检查） | 何时 |
-|------|---------|------------------|------|
-| 实验者 | `experimenter` | [`.pi/skills/experiment-agent/SKILL.md`](../skills/experiment-agent/SKILL.md) | 常驻；唯一能改 lab 代码、run、complete、`queue_take` 的角色 |
-| 设计审查 | `design-reviewer` | [`.pi/skills/design-reviewer/SKILL.md`](../skills/design-reviewer/SKILL.md) | `create_experiment` 之前 |
-| 补丁审查 | `patch-reviewer` | [`.pi/skills/patch-reviewer/SKILL.md`](../skills/patch-reviewer/SKILL.md) | 改了 lab 代码之后、跑之前 |
-| 发散审查 | `divergence-reviewer` | [`.pi/skills/divergence-reviewer/SKILL.md`](../skills/divergence-reviewer/SKILL.md) | 想场停、或队列将空时，**强制** |
-| 论文对照 | `paper-reviewer` | [`.pi/skills/paper-reviewer/SKILL.md`](../skills/paper-reviewer/SKILL.md) | 节点声称「按论文 X」时 |
-| 协议闸门 | `protocol-gate` | [`.pi/skills/protocol-gate/SKILL.md`](../skills/protocol-gate/SKILL.md) | **不是 LLM**。每次改文件、每次 run 前的硬检查 |
+协议闸门、`campaign_gate` **不是 Agent**，是工具。
 
-材料包约定：[PACKET.md](./PACKET.md)。审查结论写到 `<lab>/reviews/`。
+## 问谁
+
+| 问题 | 谁 |
+|------|----|
+| 下一刀试什么、优先级多少 | **实验设计者** |
+| 跑拟合、改 `fit.py`、建 DAG 节点 | **实验者** |
+| 这一刀能不能 `create`（Charter / 重复） | **设计审查** |
+| 刚改的代码对不对 | **补丁审查** |
+| 是不是论文里那个方法 | **论文对照** |
+| 现在能不能收工 / 能不能问用户 | **发散审查** 写结论；**实验者** 调 `campaign_gate` / `ask_user`；loop 在 `may_stop=false` 时不把话轮交给用户 |
+| 路径有没有越界、主指标有没有被换 | **协议闸门**（代码，不是模型） |
+
+不要搞混：**实验设计者出题，设计审查只批这一题。**
+
+## 每人一张卡片
+
+| 角色 | 一句话 | 产出 | 何时上场 | 允许 | 禁止 |
+|------|--------|------|----------|------|------|
+| 实验设计者 `experiment-designer` | 把还没做的实验写成队列 | `queue_put`（`proposed_by=experiment-designer`） | **没有** `queued` 项时（开场、跑空、轴死换方向） | `queue_put` / `queue_list` / 改优先级的 `queue_set` / 查论文防重复 | take、run、complete、改 `fit.py`、场停 |
+| 实验者 `experimenter` | 把队列上的活做完 | DAG 节点 + 指标 | 有 `queued` 就 take；只有 `blocked` 就改代码解锁 | take、run、complete、改 lab 代码、簿记用 `queue_set`（status / experiment_id / 解开 blocked） | **出方案**（`queue_put`、改 title/spec/优先级） |
+| 设计审查 `design-reviewer` | 这一刀该不该 create | `reviews/verdicts/design-*.json` | `create_experiment` **之前**，每刀一次 | 读材料包 + 写 verdict | 出方案、take、run、改代码 |
+| 补丁审查 `patch-reviewer` | 这次 diff 是否只实现了声明的 change | `reviews/verdicts/patch-*.json`（必须带当前 `code_sha256`） | **改了** lab 代码之后、run 之前 | `lab_code_hash` + 写 verdict | 自己改代码、run、take |
+| 论文对照 `paper-reviewer` | 和声称的那篇是否对得上 | `reviews/verdicts/paper-*.json` | 节点写了真实 `papers=` 时 | 论文切片工具 + 写 verdict | 通读 `paper.txt`、出方案、run |
+| 发散审查 `divergence-reviewer` | 停场前查漏，不是主设计 | `reviews/verdicts/divergence-*.json`；若有漏则 `queue_put`（`proposed_by=divergence-reviewer`） | **只在准备收工时** | 补漏 `queue_put` + 写 `enqueue` 或 `exhausted` | 宣布场停、take、run、改代码 |
+| 协议闸门 `protocol-gate` | 硬检查，不是角色扮演 | `assert_lab_path` / `protocol_check` / `campaign_gate` 的返回值 | 每次改文件、每次 run、每次想停 | 调用上述工具 | 找另一个 LLM「看看像不像」 |
+
+材料包：[PACKET.md](./PACKET.md)。提示词：`.pi/skills/<id>/SKILL.md`。
+
+## 顺序（常态）
 
 ```text
-Experimenter 提出下一刀
-  → Protocol Gate（路径 / 冻结字段）
-  → Design Reviewer
-  → 若声称按论文：Paper Reviewer
-  → 若改了代码：Patch Reviewer
-  → Experimenter create / run / complete
-  → 想停或队列将空：Divergence Reviewer 必须 queue_put
-       有 queued/blocked → 继续
-       出具 exhausted 结论 → 才允许场停
+无 queued
+  → 实验设计者 queue_put 若干条
+有 queued
+  → 实验者 queue_take
+  → 协议闸门
+  → 设计审查
+  → 若声称按论文：论文对照
+  → 若刚改代码：补丁审查
+  → 实验者 create / run / complete / queue_set done
+  → 还有 queued：继续 take（不要把设计者叫回来）
+  → 只有 blocked：实验者改代码、解锁、再 take（queue_take 报空但带 blocked ≠ 场停）
+  → 又空了：设计者再填，不要自己编，也不要向用户收工
+
+准备收工
+  → campaign_gate
+  → 过不了：queue_take 或先解锁
+  → 队列已空：发散审查
+       enqueue → 实验者立刻 take
+       exhausted 且无债 → 才允许停
 ```
 
-不要增加投票 Agent。审查角色没有 `edit` / `run_experiment` / `complete_experiment`，也不能改 Charter。补丁审查的 `approve` 必须带上当前 `lab_code_hash`；旧结论不能给后来的 diff 放行。
+用户口头叫停优先（说「停止」则 campaign loop 让路）。不要增加投票 Agent。审查不能改 Charter。旧 patch approve 对不上当前 `lab_code_hash` 就不能跑。绑定 lab 之后禁止用助手正文问用户；必须 `ask_user`，过不了就继续做实验。

@@ -5,6 +5,8 @@ description: Hard lab-boundary and protocol freeze checks (not an LLM reviewer).
 
 # Protocol Gate（硬闸，不是 Agent）
 
+职责：路径、冻结字段、代码哈希、能不能停——全部用工具判断。总表：`.pi/agents/ROSTER.md`。
+
 这不是审查模型。过不了就停手，不要找另一个 LLM「看看像不像泄密」。
 
 ## 每次改文件
@@ -34,3 +36,7 @@ description: Hard lab-boundary and protocol freeze checks (not an LLM reviewer).
   1. 绑定/init 时写入的 `.lab_code_baseline.json`（从未改过 runner），或
   2. **某份** `reviews/verdicts/patch-*.json` 里 `verdict=approve` **且** `code_sha256` 等于当前 `lab_code_hash`。
 - 改完代码必须再 `lab_code_hash`，把**新**哈希写进**新**的 patch 结论。旧 approve 对不上新哈希，闸门拒绝拟合。
+
+## 每次想场停之前
+
+调用 `campaign_gate`。`may_stop=false` → **不准**写收工报告。想问用户必须 `ask_user`；失败则做它返回的 `must`。空队列还要做实验 → 实验设计者。空队列且准备收工 → 发散审查。Pi campaign loop 会在你提前收工时把回合踢回来。

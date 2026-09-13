@@ -1,13 +1,15 @@
 # Experiment Agent (Pi shell)
 
-This repo is an **Agent**, not a workflow: tool results go back into the prompt; the LLM chooses the next tool.
+This repo is an **Agent**, not a workflow that invents the next spec: tool results go back into the prompt; the LLM chooses the next tool. Python must **not** pick kind/change.
+
+Once a lab is bound, the **campaign loop** (`.pi/extensions/campaign/`) re-enters the turn until `campaign_gate` allows a stop or the user says 停止. Asking the user must go through `ask_user`; that tool refuses while the campaign is unfinished.
 
 Pi owns conversation, read/grep/edit, and shell. Domain tools live in `.pi/extensions/` (expmem first). Project direction lives in `CHARTER.md`; do not silently change the task, dataset, or primary metric.
 
-Role prompts (Experimenter + reviewers) live in `.pi/skills/<role>/SKILL.md`. Index: `.pi/agents/ROSTER.md`. Reviewers are extra prompts and whitelist packets, not a Python campaign loop. Only the Experimenter runs fits.
+Who does what: `.pi/agents/ROSTER.md` (one job per hat). Prompts: `.pi/skills/<role>/SKILL.md`. Reviewers are extra prompts and whitelist packets. Only the Experimenter runs fits; only the Experiment Designer proposes the next idea.
 
 ## Rules
 
-- Do not implement a Python campaign loop that picks the next experiment.
+- Do not implement a Python loop that **chooses** the next experiment (kind/change/priority). Executing an already-queued spec, and kicking the agent when it tries to talk to the user early, is allowed.
 - Prefer `grep` / sliced `read` over dumping large files.
 - New capability = new `.pi/extensions/<pack>/`. Do not hard-code a training cluster in this file.

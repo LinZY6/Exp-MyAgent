@@ -93,10 +93,14 @@ const queuePut = defineTool({
 	name: "queue_put",
 	label: "Enqueue experiment",
 	description:
-		"Add or update an experiment idea on the lab queue. Higher priority is taken first. " +
-		"Does not create a DAG node and does not fit. Persist ideas here instead of a chat menu.",
+		"Add or update an experiment idea. proposed_by must be experiment-designer " +
+		"(or divergence-reviewer for leftover audit). The experimenter must not call this " +
+		"to invent the next cut. Does not create a DAG node and does not fit.",
 	parameters: Type.Object({
 		title: Type.String({ description: "Short name, e.g. poly3 small ridge" }),
+		proposed_by: Type.String({
+			description: "experiment-designer, or divergence-reviewer when catching leftovers",
+		}),
 		priority: Type.Optional(Type.Number({ description: "Integer; higher = sooner (default 100)" })),
 		reason: Type.Optional(Type.String()),
 		kind: Type.Optional(Type.String()),
@@ -119,10 +123,13 @@ const queueSet = defineTool({
 	name: "queue_set",
 	label: "Update queue task",
 	description:
-		"Change priority or status of a queued idea after seeing new metrics. " +
-		"Example: bump C after A looks overfit; mark a task done after complete_experiment.",
+		"Experimenter: status, experiment_id, note, blocked_on after a run. " +
+		"Designer: priority/title/reason/spec with proposed_by=experiment-designer.",
 	parameters: Type.Object({
 		id: Type.String(),
+		proposed_by: Type.Optional(
+			Type.String({ description: "Required when changing title, spec, or priority" }),
+		),
 		priority: Type.Optional(Type.Number()),
 		status: Type.Optional(Type.String({ description: "queued|running|done|skipped|blocked" })),
 		note: Type.Optional(Type.String()),
@@ -140,8 +147,8 @@ const queueTake = defineTool({
 	label: "Take next queue task",
 	description:
 		"Return the highest-priority queued task and mark it running. Does not run the fit. " +
-		"Then you search/create/run/complete. If something is already running, returns that instead. " +
-		"peek=true lists the next task without claiming it.",
+		"empty=true is not a campaign-stop: if blocked remains, implement it; otherwise call Designer. " +
+		"If something is already running, returns that instead. peek=true lists the next task without claiming it.",
 	parameters: Type.Object({
 		peek: Type.Optional(Type.Boolean()),
 	}),

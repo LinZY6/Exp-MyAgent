@@ -1,6 +1,6 @@
 # Review packets
 
-Experimenter 在切换到某审查角色之前，把**白名单材料**写到 lab，再 `read` 该角色的 `SKILL.md`，只根据材料包作答。不要把实验者的收工叙事、思维链、或白名单外的文件塞进包。
+Experimenter 在切换到设计者或某审查角色之前，把**白名单材料**写到 lab，再 `read` 该角色的 `SKILL.md`，只根据材料包作答。不要把实验者的收工叙事、思维链、或白名单外的文件塞进包。
 
 ## 落盘
 
@@ -15,7 +15,8 @@ Experimenter 在切换到某审查角色之前，把**白名单材料**写到 la
 
 | 角色 | 包里可以有 | 包里禁止 |
 |------|------------|----------|
-| design-reviewer | lab `CHARTER.md`；`protocol.json`；本刀 `kind/upstream/change/knobs/reason`；DAG **摘要**（id, kind, change, 主指标, verdict）；队列标题+priority | `fit.py` 全文；原始样本；`.env`；实验者「我认为够了」 |
+| experiment-designer | lab `CHARTER.md`；`protocol.json` knobs（当接口）；DAG 摘要 + 上一刀主指标；`queue_list`；已实现 `model=` 名 | `fit.py` 全文；原始样本；`.env`；实验者「下一刀我想…」 |
+| design-reviewer | lab `CHARTER.md`；`protocol.json`；本刀 `kind/upstream/change/knobs/reason`；`proposed_by`；DAG **摘要**（id, kind, change, 主指标, verdict）；队列标题+priority | `fit.py` 全文；原始样本；`.env`；实验者「我认为够了」；替实验者编下一刀 |
 | patch-reviewer | CHARTER + protocol；**unified diff**（仅 lab 内声明要改的文件）；对应 `change`；可选一次 `run_experiment` 的 metrics **键名** | lab 外 diff；`.env`；下一刀科研故事；整份 jsonl |
 | divergence-reviewer | CHARTER 冻结栏 + 已实现 knobs 列表（当接口，不当宇宙）；DAG 摘要 + 最佳点指标；当前 `queue_list`；已实现 `model=` 名 | 实验者场停报告 / 「再做没科学意义」；`fit.py` 全文（可一行列出已支持 model） |
 | paper-reviewer | CHARTER；本刀 change/knobs；`search_paper` / `read_paper` 的指定切片 | 整篇 `paper.txt`；其它论文；jsonl 全文 |

@@ -11,7 +11,7 @@ When the user describes a **new project** (new function, new dataset, "在某某
 2. After they name a folder, call `use_lab` **without** `force`. Show them `resolved`, `safe`, `entries`, and any `error`.
 3. Wait for an explicit yes ("就这个" / "确认" / "用这个目录").
 4. Call `use_lab` again with the same path and `force=true`. That writes this lab's CHARTER / src / jsonl. Do **not** edit the repo `CHARTER.md`.
-5. Then **run the campaign yourself** as Experimenter (`.pi/skills/experiment-agent/SKILL.md`): search → reviews → create → run → complete → next idea. Do not ask which experiment to try. The ledger is `<lab>/fn_fit/experiments.jsonl`. Role index: `.pi/agents/ROSTER.md`.
+5. Then follow `.pi/agents/ROSTER.md`: Designer fills the queue only when it is empty; Experimenter takes and runs. Do not ask which experiment to try. Divergence is only for campaign-stop. The ledger is `<lab>/fn_fit/experiments.jsonl`.
 
 ## Bounds (every edit)
 

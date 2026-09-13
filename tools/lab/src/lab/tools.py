@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from lab.campaign import ask_user as check_ask_user
+from lab.campaign import check_stop
 from lab.codehash import check_run, digest
 from lab.safety import inspect_lab, is_within, resolve_lab_path
 from lab.session import load as load_session
@@ -150,6 +152,17 @@ def protocol_check(params: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def campaign_gate(params: dict[str, Any]) -> dict[str, Any]:
+    lab = _bound_lab(params)
+    if lab is None:
+        return {"ok": False, "may_stop": False, "error": "no lab bound; use_lab first"}
+    return check_stop(lab)
+
+
+def ask_user(params: dict[str, Any]) -> dict[str, Any]:
+    return check_ask_user(_bound_lab(params), str(params.get("text") or ""))
+
+
 def handle(params: dict[str, Any]) -> dict[str, Any]:
     action = str(params.get("action") or "use_lab").strip()
     if action in {"status", "lab_status"}:
@@ -160,6 +173,10 @@ def handle(params: dict[str, Any]) -> dict[str, Any]:
         return code_hash(params)
     if action in {"protocol_check", "check_run"}:
         return protocol_check(params)
+    if action in {"campaign_gate", "check_stop"}:
+        return campaign_gate(params)
+    if action in {"ask_user", "user_gate"}:
+        return ask_user(params)
     if action in {"use_lab", "inspect", "bind"}:
         return use_lab(params)
     return {"ok": False, "error": f"unknown action: {action}"}

@@ -140,6 +140,19 @@ const protocolCheck = defineTool({
 	},
 });
 
+const campaignGate = defineTool({
+	name: "campaign_gate",
+	label: "May the campaign stop",
+	description:
+		"Hard check before any campaign-stop report. may_stop is false if the queue still has " +
+		"queued/blocked items, or the latest divergence verdict is not exhausted. " +
+		"If may_stop is false you MUST continue this turn (queue_take, unblock, or finish running) — do not ask the user.",
+	parameters: Type.Object({}),
+	async execute() {
+		return asResult(invoke({ action: "campaign_gate" }));
+	},
+});
+
 export function readLabSession(root = repoRoot()): { lab?: string; collection?: string } {
 	const p = join(root, ".pi", "lab-session.json");
 	if (!existsSync(p)) return {};
@@ -156,4 +169,5 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool(assertLabPath);
 	pi.registerTool(labCodeHash);
 	pi.registerTool(protocolCheck);
+	pi.registerTool(campaignGate);
 }
