@@ -1,4 +1,4 @@
-"""Experiment task queue pack (embeddable CPython)."""
+"""Roster pack runner (embeddable CPython ignores PYTHONPATH)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lab" / "src"))
 
-from exqueue.tools import handle  # noqa: E402
+from roster.tools import handle  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:

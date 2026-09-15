@@ -71,7 +71,7 @@ def patch_verdicts(lab: Path) -> list[tuple[Path, dict[str, Any]]]:
             continue
         if not isinstance(obj, dict):
             continue
-        if str(obj.get("role") or "") != "patch-reviewer":
+        if str(obj.get("role") or "") not in {"patch-reviewer", "reviewer"}:
             continue
         rows.append((path, obj))
     return rows
@@ -123,13 +123,14 @@ def check_run(lab: Path) -> dict[str, Any]:
         "ok": False,
         "error": (
             "lab src/protocol.json changed since baseline; "
-            "need a patch-reviewer approve whose code_sha256 equals lab_code_hash"
+            "need a reviewer (or patch-reviewer) approve whose code_sha256 equals lab_code_hash"
         ),
         "code_sha256": sha,
         "baseline_sha256": baseline.get("code_sha256"),
         "files": current["files"],
         "hint": (
             "After the edit, call lab_code_hash. Put that code_sha256 into a new "
-            "reviews/verdicts/patch-*.json with verdict=approve. Old approve files do not count."
+            "reviews/verdicts/review-*.json (role=reviewer) with verdict=approve. "
+            "Old approve files do not count."
         ),
     }

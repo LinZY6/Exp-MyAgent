@@ -60,6 +60,7 @@ function invoke(params: Record<string, unknown>): string {
 function parseGate(raw: string): {
 	ok?: boolean;
 	may_stop?: boolean;
+	may_yield?: boolean;
 	must?: string | null;
 	next?: { id?: string; title?: string; status?: string } | null;
 	error?: string;
@@ -81,36 +82,7 @@ function asResult(text: string) {
 	};
 }
 
-const ASK_MARKERS = [
-	"要继续",
-	"说一声",
-	"要我接着",
-	"哪一个",
-	"选一个",
-	"要不要",
-	"继续吗",
-	"should i continue",
-	"which one",
-];
-
 const HALT = /停止这场|停止实验|别跑了|不要继续|stop campaign|\bhalt\b/i;
-
-function looksLikeAsk(text: string): boolean {
-	const t = text.trim().toLowerCase();
-	if (!t) return false;
-	return ASK_MARKERS.some((k) => t.includes(k.toLowerCase()));
-}
-
-function assistantText(message: unknown): string {
-	const msg = message as { content?: unknown; role?: string };
-	const c = msg?.content;
-	if (typeof c === "string") return c;
-	if (!Array.isArray(c)) return "";
-	return c
-		.filter((p) => p && typeof p === "object" && (p as { type?: string }).type === "text")
-		.map((p) => String((p as { text?: string }).text || ""))
-		.join("\n");
-}
 
 function hasToolCalls(message: unknown): boolean {
 	const msg = message as { content?: unknown; toolCalls?: unknown[] };
@@ -125,10 +97,16 @@ function hasToolCalls(message: unknown): boolean {
 
 function continuePrompt(gate: ReturnType<typeof parseGate>): string {
 	const next = gate.next ? `${gate.next.id || ""} ${gate.next.title || ""}`.trim() : "";
+	if (gate.must === "ask_user" || (gate.may_stop && !gate.may_yield)) {
+		return (
+			"[campaign-loop] 科学停场已就绪，但还不能把话轮交给用户。"
+			+ "现在就调用 ask_user。禁止写收工报告。禁止在正文里宣布做完。"
+		);
+	}
 	return (
-		`[campaign-loop] 这场还没停。must=${gate.must || "queue_take"}` +
+		`[campaign-loop] 这场还没停。must=${gate.must || "call_designer"}` +
 		(next ? ` next=${next}` : "") +
-		"。现在就调用对应工具。禁止问用户。不要写收工报告。"
+		"。现在就调用对应的 Agent 工具（call_designer / call_experimenter / call_reviewer / call_divergence）。禁止问用户。不要写收工报告。"
 	);
 }
 
@@ -137,7 +115,10 @@ const askUser = defineTool({
 	label: "Ask the user (gated)",
 	description:
 		"The only way to ask the user a question once a lab is bound. " +
-		"Calls the campaign intercept: if may_stop is false this tool fails and you must continue (queue_take / designer / unblock). " +
+		"Calls the campaign intercept: if may_stop is false this tool fails and you must call the agent in must " +
+		"(call_designer / call_experimenter / call_reviewer / call_divergence). " +
+		"If may_stop is true but may_yield is false, you MUST call this tool — a wrap-up report is not a stop. " +
+		"Divergence must record_exhausted after designer agree_stop before this can succeed. " +
 		"Do not write questions in assistant text.",
 	parameters: Type.Object({
 		text: Type.String({ description: "Draft question for the user" }),
@@ -165,11 +146,9 @@ export default function (pi: ExtensionAPI) {
 		const msg = event.message as { role?: string };
 		if (msg?.role !== "assistant") return;
 		if (hasToolCalls(event.message)) return;
-		const text = assistantText(event.message);
-		if (!looksLikeAsk(text)) return;
 		const gate = parseGate(invoke({ action: "campaign_gate" }));
 		if (gate.error && String(gate.error).includes("no lab bound")) return;
-		if (gate.may_stop) return;
+		if (gate.may_yield) return;
 		const replacement = continuePrompt(gate);
 		return {
 			message: {
@@ -183,7 +162,7 @@ export default function (pi: ExtensionAPI) {
 		if (userHalt) return;
 		const gate = parseGate(invoke({ action: "campaign_gate" }));
 		if (gate.error && String(gate.error).includes("no lab bound")) return;
-		if (gate.may_stop) return;
+		if (gate.may_yield) return;
 		await pi.sendMessage(
 			{
 				customType: "campaign-loop",

@@ -30,4 +30,4 @@ Put the same knobs in `change` (prose, for BM25) and in `run_experiment` (struct
 
 After a successful run, `complete_experiment` with the returned `metrics` (`test_mse` is primary, lower is better). Empty metrics / crash → complete with no metrics so the node is dropped.
 
-Then follow `.pi/agents/ROSTER.md`: if the queue still has work, `queue_take`; if empty, Experiment Designer. Do not pick the next spec yourself. Do not ask the user. Do not write a Python loop. If you edited lab `fit.py` / `world.py` / `protocol.json`, call `lab_code_hash` and get a **new** Patch Reviewer approve that copies that hash; `run_experiment` refuses if the tree does not match. A campaign-stop still requires `campaign_gate` `may_stop: true`.
+Then follow `.pi/agents/ROSTER.md`: the **Reviewer** is the one who `create` / `run` / `complete`. The Experimenter only implements and `queue_put`. Empty queue → `call_divergence`, not a user question. If lab `src` changed, the Reviewer copies the current `lab_code_hash` into a new approve; `run_experiment` refuses a stale hash. A campaign-stop still requires `ask_user` so `campaign_gate.may_yield` is true (`may_stop` alone is not enough).

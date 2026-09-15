@@ -44,8 +44,12 @@ def test_list_and_preview(tmp_path: Path):
     assert rows[0]["model"] == "deepseek-v4-flash"
 
 
-def test_html_exists():
-    assert (Path(__file__).resolve().parents[1] / "index.html").is_file()
+def test_html_has_role_palette():
+    html = (Path(__file__).resolve().parents[1] / "index.html").read_text(encoding="utf-8")
+    assert "experiment-designer" in html
+    assert "ROLE_META" in html
+    assert "群聊" in html
+    assert 'class="avatar"' in html or "avatar" in html
 
 
 def test_fixture_is_jsonl():

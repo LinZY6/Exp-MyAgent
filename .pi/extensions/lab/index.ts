@@ -126,7 +126,7 @@ const labCodeHash = defineTool({
 	name: "lab_code_hash",
 	label: "Hash lab runner code",
 	description:
-		"SHA-256 of this lab's src/ plus protocol.json. Patch-reviewer must copy code_sha256 " +
+		"SHA-256 of this lab's src/ plus protocol.json. Reviewer must copy code_sha256 " +
 		"into the approve verdict. After a later edit the hash changes; old approve files do not match.",
 	parameters: Type.Object({}),
 	async execute() {
@@ -139,7 +139,7 @@ const protocolCheck = defineTool({
 	label: "Protocol gate before run",
 	description:
 		"Hard check before any lab fit: if src/ or protocol.json drifted from the init baseline, " +
-		"a patch-reviewer approve must carry the current lab_code_hash. Old approve files are not enough.",
+		"a reviewer approve must carry the current lab_code_hash. Old approve files are not enough.",
 	parameters: Type.Object({}),
 	async execute() {
 		return asResult(invoke({ action: "protocol_check" }));
@@ -150,9 +150,10 @@ const campaignGate = defineTool({
 	name: "campaign_gate",
 	label: "May the campaign stop",
 	description:
-		"Hard check before any campaign-stop report. may_stop is false if the queue still has " +
-		"queued/blocked items, or the latest divergence verdict is not exhausted. " +
-		"If may_stop is false you MUST continue this turn (queue_take, unblock, or finish running) — do not ask the user.",
+		"Hard check before any campaign-stop report. may_stop is false unless the queue is empty, " +
+		"the designer agree_stop, and the latest divergence verdict is exhausted. " +
+		"may_stop only means ask_user is allowed; the loop still holds the turn until ask_user succeeds (may_yield). " +
+		"If may_stop is false you MUST call the agent tool in must — do not ask the user.",
 	parameters: Type.Object({}),
 	async execute() {
 		return asResult(invoke({ action: "campaign_gate" }));

@@ -42,9 +42,14 @@ def _patch_gate(lab: str) -> dict | None:
     from lab.codehash import check_run  # noqa: E402
 
     out = check_run(Path(lab))
-    if out.get("ok"):
-        return None
-    return out
+    if not out.get("ok"):
+        return out
+    from lab.hat import require_hat  # noqa: E402
+
+    hat = require_hat(Path(lab), {"reviewer"}, "run_spfit")
+    if hat:
+        return hat
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

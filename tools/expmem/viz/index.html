@@ -248,7 +248,56 @@
       return [...seen.values()];
     }
 
-    function layout(nodes) {
+    const NODE_W = 220;
+    const COL = 248;
+    const ROW = 148;
+    const BRANCH_GAP = 96;
+    const COMP_GAP = 200;
+
+    function connectedComponents(nodes) {
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const adj = new Map(nodes.map((n) => [n.id, new Set()]));
+      nodes.forEach((n) => {
+        n.upstream_ids.forEach((p) => {
+          if (!adj.has(p)) return;
+          adj.get(n.id).add(p);
+          adj.get(p).add(n.id);
+        });
+      });
+      const seen = new Set();
+      const comps = [];
+      const order = new Map(nodes.map((n, i) => [n.id, i]));
+      nodes.forEach((n) => {
+        if (seen.has(n.id)) return;
+        const stack = [n.id];
+        const group = [];
+        seen.add(n.id);
+        while (stack.length) {
+          const id = stack.pop();
+          group.push(byId.get(id));
+          (adj.get(id) || []).forEach((nb) => {
+            if (!seen.has(nb)) {
+              seen.add(nb);
+              stack.push(nb);
+            }
+          });
+        }
+        group.sort((a, b) => order.get(a.id) - order.get(b.id));
+        comps.push(group);
+      });
+      comps.sort((a, b) => order.get(a[0].id) - order.get(b[0].id));
+      return comps;
+    }
+
+    function shareParent(a, b) {
+      const A = a.upstream_ids || [];
+      const B = b.upstream_ids || [];
+      if (!A.length && !B.length) return false;
+      const setB = new Set(B);
+      return A.some((p) => setB.has(p));
+    }
+
+    function layoutComponent(nodes) {
       const byId = new Map(nodes.map((n) => [n.id, n]));
       const rank = {};
       function getRank(id, stack) {
@@ -271,21 +320,52 @@
         levels.forEach((row) => {
           row.sort((a, b) => {
             const avg = (n) => {
-              const ps = n.upstream_ids.map((p) => levels[rank[p]] ? levels[rank[p]].indexOf(byId.get(p)) : 0);
+              const ps = n.upstream_ids
+                .filter((p) => byId.has(p))
+                .map((p) => (levels[rank[p]] ? levels[rank[p]].indexOf(byId.get(p)) : 0));
               return ps.length ? ps.reduce((s, x) => s + x, 0) / ps.length : 0;
             };
             return avg(a) - avg(b) || a.id.localeCompare(b.id);
           });
         });
       }
-      const W = 248, H = 118, padX = 48, padY = 56;
       const pos = {};
-      const maxW = Math.max(...levels.map((r) => r.length), 1);
       levels.forEach((row, i) => {
-        const offset = ((maxW - row.length) * W) / 2;
         row.forEach((n, j) => {
-          pos[n.id] = { x: padX + offset + j * W, y: padY + i * H };
+          const ps = n.upstream_ids.filter((p) => pos[p]);
+          const preferred = ps.length
+            ? ps.reduce((s, p) => s + pos[p].x, 0) / ps.length
+            : 0;
+          let x = preferred;
+          if (j > 0) {
+            const prev = row[j - 1];
+            const gap = shareParent(n, prev) ? COL : COL + BRANCH_GAP;
+            x = Math.max(pos[prev.id].x + gap, x);
+          }
+          pos[n.id] = { x, y: i * ROW };
         });
+      });
+      const xs = Object.values(pos).map((p) => p.x);
+      const minx = xs.length ? Math.min(...xs) : 0;
+      Object.values(pos).forEach((p) => {
+        p.x -= minx;
+      });
+      return pos;
+    }
+
+    function layout(nodes) {
+      if (!nodes.length) return {};
+      const pos = {};
+      let xCursor = 48;
+      const padY = 56;
+      connectedComponents(nodes).forEach((comp) => {
+        const local = layoutComponent(comp);
+        let width = 0;
+        Object.keys(local).forEach((id) => {
+          pos[id] = { x: xCursor + local[id].x, y: padY + local[id].y };
+          width = Math.max(width, local[id].x);
+        });
+        xCursor += width + NODE_W + COMP_GAP;
       });
       return pos;
     }

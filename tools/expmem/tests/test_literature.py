@@ -1,6 +1,8 @@
-"""search_literature: HTTPS + 429 retry. No network."""
+"""search_literature: OpenAlex first, Atom last. No live network."""
 
 from __future__ import annotations
+
+import json
 
 from expmem.literature import search_literature
 
@@ -14,31 +16,62 @@ ATOM = b"""<?xml version="1.0"?>
 </feed>
 """
 
+OPENALEX = json.dumps(
+    {
+        "results": [
+            {
+                "id": "https://openalex.org/W2963375290",
+                "display_name": "Attention Is All You Need",
+                "ids": {"arxiv": "https://arxiv.org/abs/1706.03762"},
+                "abstract_inverted_index": {"Transformers": [0]},
+                "primary_location": {"landing_page_url": "https://arxiv.org/abs/1706.03762"},
+            }
+        ]
+    }
+).encode()
 
-def test_retries_429_then_parses():
+
+def test_openalex_hits_skip_atom():
+    seen: list[str] = []
+
+    def get(url: str):
+        seen.append(url)
+        assert url.startswith("https://")
+        if "openalex.org" not in url:
+            raise AssertionError("Atom must not run when OpenAlex has hits")
+        return 200, OPENALEX
+
+    hits = search_literature("attention", limit=1, get=get)
+    assert hits[0]["paper_id"] == "arxiv:1706.03762"
+    assert "Attention" in hits[0]["title"]
+    assert hits[0]["source"] == "openalex"
+    assert len(seen) == 1
+
+
+def test_atom_after_openalex_empty():
     import expmem.literature as lit
 
     lit.time.sleep = lambda *_a, **_k: None
-    n = {"i": 0}
+    atom_calls = {"n": 0}
 
     def get(url: str):
-        assert url.startswith("https://")
-        n["i"] += 1
-        if n["i"] == 1:
+        if "openalex.org" in url:
+            return 200, b'{"results":[]}'
+        atom_calls["n"] += 1
+        if atom_calls["n"] == 1:
             return 429, b""
         return 200, ATOM
 
     hits = search_literature("attention", limit=1, get=get)
-    assert n["i"] == 2
     assert hits[0]["paper_id"] == "arxiv:1706.03762"
-    assert "Attention" in hits[0]["title"]
+    assert hits[0]["source"] == "arxiv_atom"
 
 
 def test_empty_query():
     assert search_literature("  ") == []
 
 
-def test_429_does_not_try_second_endpoint():
+def test_both_fail_raises():
     import expmem.literature as lit
 
     lit.time.sleep = lambda *_a, **_k: None
@@ -52,13 +85,14 @@ def test_429_does_not_try_second_endpoint():
         search_literature("core loss", limit=1, get=get)
         raise AssertionError("expected ConnectionError")
     except ConnectionError as e:
-        assert "429" in str(e)
-    assert len(seen) == 2  # one retry on the first endpoint only
-    assert all("export.arxiv.org" in u for u in seen)
+        assert "OpenAlex" in str(e) or "Atom" in str(e)
+    assert any("openalex.org" in u for u in seen)
+    assert any("export.arxiv.org" in u for u in seen)
 
 
 if __name__ == "__main__":
-    test_retries_429_then_parses()
+    test_openalex_hits_skip_atom()
+    test_atom_after_openalex_empty()
     test_empty_query()
-    test_429_does_not_try_second_endpoint()
+    test_both_fail_raises()
     print("ok test_literature")

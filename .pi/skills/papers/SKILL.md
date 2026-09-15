@@ -7,13 +7,13 @@ description: Download an arXiv paper and read it in slices (outline, grep, cappe
 
 `search_papers` only returns title + short abstract. Full text is this pack. **You do not download PDFs yourself** — the tools fetch from arXiv.
 
-Vendor Python **has network**. A 429 from `search_papers` is only the Atom search API being rate-limited. It does **not** mean fetch is offline. Never write `papers_fetch.py` (or scrape `arxiv.org/search` HTML) in the lab.
+Vendor Python **has network**. `search_papers` tries OpenAlex first, then arXiv Atom. Atom 429/timeout does **not** mean fetch is offline (`arxiv.org/html/...` is a different host). Never write `papers_fetch.py` (or scrape `arxiv.org/search` HTML) in the lab.
 
-The **Experiment Designer** may `fetch_paper` / `search_paper` / `read_paper` when proposing (slices only). **Paper Reviewer** uses the same tools to check a claimed citation. Do not dump `paper.txt` into a packet.
+The **Experiment Designer** may `deep_research` / `fetch_paper` / `search_paper` / `read_paper` when proposing (slices only). The **Reviewer** may slice-check a claimed citation. The Experimenter must not fetch papers. Do not dump `paper.txt` into a packet.
 
 If the user wants a random paper / 随便看一篇: `random_paper` (optional `query` / `category`). It picks and downloads. Then `read_paper(section="Abstract")`.
 
-If `search_papers` returns 429 / timeout: do **not** drop literature for the campaign. Retry once. If you already know an arXiv id (from DIRECTIONS or a previous hit), `fetch_paper` into `<lab>/papers/` — that path is HTTPS HTML, not the search API. `random_paper` also downloads into the current lab.
+If `search_papers` / `deep_research` returns empty: **do not invent an arXiv id**, **do not call search_papers again this turn**, and **do not design experiments from textbooks with empty `papers`**. Retry `deep_research` next turn, or `fetch_paper` a known id from DIRECTIONS. `random_paper` still hits Atom and is not a literature substitute. Fetch HTML does not use Atom. Never scrape `arxiv.org/search`.
 
 Otherwise:
 

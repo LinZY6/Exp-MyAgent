@@ -1,60 +1,40 @@
 # 角色总表
 
-同一时刻只戴一顶帽子。先看这张表，再打开对应 `SKILL.md`。这不是 Python 调度器。
-
-协议闸门、`campaign_gate` **不是 Agent**，是工具。
+主 loop 只调度。四个 Agent 都是工具：先 `call_*`，再戴那顶帽子，`agent_done` 摘掉。协议闸门、`campaign_gate` **不是** Agent。
 
 ## 问谁
 
 | 问题 | 谁 |
 |------|----|
-| 下一刀试什么、某一刀是什么意思 | **实验设计者**（必须看见用户指令、DAG、论文） |
-| 跑拟合、改 `fit.py`、建 DAG 节点 | **实验者** |
-| 这一刀能不能 `create`（Charter / 重复） | **设计审查** |
-| 刚改的代码对不对 | **补丁审查** |
-| 是不是论文里那个方法 | **论文对照** |
-| 现在能不能收工 / 能不能问用户 | **发散审查** 写结论；**实验者** 调 `campaign_gate` / `ask_user`；loop 在 `may_stop=false` 时不把话轮交给用户 |
-| 路径有没有越界、主指标有没有被换 | **协议闸门**（代码，不是模型） |
+| 下一刀试什么、某一刀的意义/必要性/怎么做 | **设计者**（论文 + 只读 DAG + 自己的记忆） |
+| 按需求改代码、把可跑实验打进队列 | **实验者**（无记忆） |
+| 队列里的实验能不能跑、跑完写入 DAG | **审查者**（无记忆） |
+| 队列空了 / 想问用户 | **发散拦截者**（不读设计者记忆）先给出多样方案，反问「为什么不试 / 论文为什么少」；反复质疑满 3 轮后，设计者仍要停，才 `record_exhausted` + `ask_user` |
 
-不要搞混：**实验设计者出题，设计审查只批这一题。**
+不要搞混：**设计者出需求，实验者实现并入队，审查者执行并记账。**
 
 ## 每人一张卡片
 
 | 角色 | 一句话 | 产出 | 何时上场 | 允许 | 禁止 |
 |------|--------|------|----------|------|------|
-| 实验设计者 `experiment-designer` | 读指令+DAG+论文，出方案；也可解释某一刀 | `queue_put` 或 `designer-clarify-*.json` | 队列空 / 轴死 / 实验者问「这刀什么意思」 / 用户指令更新 | `queue_put`、论文切片、查重 | take、run、complete、改 `fit.py`、场停 |
-| 实验者 `experimenter` | 把队列上的活做完 | DAG 节点 + 指标 | 有 `queued` 就 take；只有 `blocked` 就改代码解锁；看不懂某一刀就问设计者 | take、run、complete、改 lab 代码、簿记 `queue_set` | **出方案**（`queue_put`、改 title/spec/优先级）；看不懂时不要问用户、不要自己编 |
-| 设计审查 `design-reviewer` | 这一刀该不该 create | `reviews/verdicts/design-*.json` | `create_experiment` **之前**，每刀一次 | 读材料包 + 写 verdict | 出方案、take、run、改代码 |
-| 补丁审查 `patch-reviewer` | 这次 diff 是否只实现了声明的 change | `reviews/verdicts/patch-*.json`（必须带当前 `code_sha256`） | **改了** lab 代码之后、run 之前 | `lab_code_hash` + 写 verdict | 自己改代码、run、take |
-| 论文对照 `paper-reviewer` | 和声称的那篇是否对得上 | `reviews/verdicts/paper-*.json` | 节点写了真实 `papers=` 时 | 论文切片工具 + 写 verdict | 通读 `paper.txt`、出方案、run |
-| 发散审查 `divergence-reviewer` | 停场前查漏，不是主设计 | `reviews/verdicts/divergence-*.json`；若有漏则 `queue_put`（`proposed_by=divergence-reviewer`） | **只在准备收工时** | 补漏 `queue_put` + 写 `enqueue` 或 `exhausted` | 宣布场停、take、run、改代码 |
-| 协议闸门 `protocol-gate` | 硬检查，不是角色扮演 | `assert_lab_path` / `protocol_check` / `campaign_gate` 的返回值 | 每次改文件、每次 run、每次想停 | 调用上述工具 | 找另一个 LLM「看看像不像」 |
+| 设计者 `experiment-designer` | 查重 DAG、DeepResearch、出多样需求；答实验者/拦截者的问（拦截者带来的方案要逐条采纳或拒绝） | `post_requirement`、`designer_reply`、记忆 | `call_designer`：开场、澄清、停场签字、discuss | 论文工具、`search_experiments`、`summarize_dag`、需求与答复 | `queue_put` / take / run / complete / 改 `fit.py` / 改 DAG / `ask_user` |
+| 实验者 `experimenter` | 拿当前需求（或审查退回）改代码并入队 | `queue_put`（必须 `requirement_id`） | `call_experimenter` | lab 编辑、`queue_put`、`ask_designer` | 出方案、搜论文、take、run、complete、问用户 |
+| 审查者 `reviewer` | 审代码（泄露/是否符合需求）、跑实验、写 DAG；失败退回实验者 | DAG 节点；或 `bounce_to_experimenter` | `call_reviewer`（有 queued/running） | take、create/run/complete、bounce | 改 lab 源码、`queue_put`、搜论文、问用户 |
+| 发散拦截者 `divergence-interceptor` | 独立质疑：多样方案 + 为什么不试 + 催更多论文；满 3 轮才允许设计者停 | `ask_designer`（≥2 条不同 kind 的 `proposals`）；或 `record_exhausted` + `ask_user` | `call_divergence`（队列空且有历史） | `summarize_dag`、`ask_designer`、`record_exhausted`、过闸后的 `ask_user` | 读设计者记忆/需求、`queue_put`、复述设计者思路、第 1–2 轮就停 |
 
-材料包：[PACKET.md](./PACKET.md)。提示词：`.pi/skills/<id>/SKILL.md`。
+旧的设计审查 / 补丁审查 / 论文对照并进 **审查者**。材料包：[PACKET.md](./PACKET.md)。
 
 ## 顺序（常态）
 
 ```text
-无 queued
-  → 实验设计者 queue_put 若干条
-有 queued
-  → 实验者 queue_take
-  → 协议闸门
-  → 设计审查
-  → 若这一刀声称按论文：论文对照
-  → 若刚改代码：补丁审查
-  → 实验者看不懂这一刀：问设计者 clarify，再继续
-  → 实验者 create / run / complete / queue_set done
-  → 还有 queued：继续 take（不要为了「下一刀试什么」把设计者叫回来）
-  → 只有 blocked：实验者改代码、解锁、再 take（queue_take 报空但带 blocked ≠ 场停）
-  → 又空了：设计者再填，不要自己编，也不要向用户收工
-
-准备收工
-  → campaign_gate
-  → 过不了：queue_take 或先解锁
-  → 队列已空：发散审查
-       enqueue → 实验者立刻 take
-       exhausted 且无债 → 才允许停
+campaign_gate.must
+  call_designer     → DeepResearch + 查重 + post_requirement（可多座 discuss）→ agent_done
+  call_experimenter → 实现 / 被审退回后重写 → queue_put requirement_id=… 或 ask_designer → agent_done
+  call_reviewer     → queue_take → 审泄露与 change → 不通过 bounce_to_experimenter
+                      通过 → create → run → complete → DAG
+  call_divergence   → 不读设计者记忆；DIRECTIONS+CHARTER+DAG → 多样 proposals → 反问为什么不试
+                      设计者调研论文并 post_requirement → 再 call_experimenter
+                      满 3 轮质疑后设计者仍要停 → record_exhausted → ask_user
 ```
 
-用户口头叫停优先（说「停止」则 campaign loop 让路）。不要增加投票 Agent。审查不能改 Charter。旧 patch approve 对不上当前 `lab_code_hash` 就不能跑。绑定 lab 之后禁止用助手正文问用户；必须 `ask_user`，过不了就继续做实验。
+用户口头叫停优先。不要增加投票 Agent。审查不能改 Charter。没有当前 `lab_code_hash` 的 reviewer approve 就不能 `run_experiment`。绑定 lab 之后禁止用助手正文问用户。`may_stop` 不是收工许可；`may_yield`（`ask_user` 成功）才把话轮交出去。

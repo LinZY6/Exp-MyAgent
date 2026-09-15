@@ -6,18 +6,21 @@
   <title>Agent 会话查阅</title>
   <style>
     :root {
-      --bg: #121317;
+      --bg: #0b0c10;
       --panel: #1b1c22;
       --line: #2c2e36;
       --text: #e6e4df;
       --muted: #9a968c;
       --accent: #d4a056;
-      --user: #6ea8ff;
-      --experimenter: #d4a056;
-      --design: #5dbe8d;
+      --chat: #14151b;
+      --user: #5b9dff;
+      --experimenter: #f0b429;
+      --designer: #3dcc9a;
+      --design: #2ec4d6;
       --patch: #c084fc;
-      --divergence: #e0a54b;
-      --paper: #6ea8ff;
+      --divergence: #ff8c42;
+      --paper: #7aa2ff;
+      --gate: #8b9099;
       --tool: #8b9099;
       --err: #e06c75;
     }
@@ -71,27 +74,89 @@
       padding: 3px 10px; color: var(--muted);
     }
     .chip.on { color: var(--text); border-color: currentColor; }
+    .chip[data-role="user"].on { color: var(--user); }
     .chip[data-role="experimenter"].on { color: var(--experimenter); }
+    .chip[data-role="experiment-designer"].on { color: var(--designer); }
     .chip[data-role="design-reviewer"].on { color: var(--design); }
     .chip[data-role="patch-reviewer"].on { color: var(--patch); }
     .chip[data-role="divergence-reviewer"].on { color: var(--divergence); }
-    #log { overflow: auto; padding: 16px 18px 32px; }
+    .chip[data-role="paper-reviewer"].on { color: var(--paper); }
+    #log {
+      overflow: auto; padding: 18px 16px 40px;
+      background: var(--chat);
+      background-image: radial-gradient(ellipse at top, #1a1c24 0%, transparent 55%);
+    }
     .hint { color: var(--muted); text-align: center; padding: 48px 16px; }
-    .div {
-      display: flex; align-items: center; gap: 10px; margin: 18px 0 10px;
-      color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    .turn {
+      display: flex; gap: 10px; align-items: flex-start;
+      width: 100%; margin: 0 0 14px; padding: 0 12px;
     }
-    .div::before, .div::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-    .turn { max-width: 920px; margin: 0 auto 14px; }
-    .turn.sel .card { outline: 1px solid var(--accent); }
-    .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-    .who b { color: var(--text); font-weight: 650; }
+    .turn.cont { margin-top: -8px; }
+    .turn.cont .avatar { visibility: hidden; }
+    .turn.cont .who { visibility: hidden; height: 0; margin: 0; overflow: hidden; }
+    .turn.user { flex-direction: row-reverse; }
+    .turn.sel .card { box-shadow: 0 0 0 1px var(--accent); }
+    .avatar {
+      flex: 0 0 40px; width: 40px; height: 40px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 750; font-size: 14px; color: #121317; letter-spacing: 0;
+    }
+    .col { min-width: 0; max-width: min(620px, calc(100% - 50px)); }
+    .turn.cont { margin-top: -8px; }
+    .turn.cont .avatar { visibility: hidden; }
+    .turn.cont .who { visibility: hidden; height: 0; margin: 0; overflow: hidden; }
+    .turn.user { flex-direction: row-reverse; }
+    .turn.sel .card { box-shadow: 0 0 0 1px var(--accent); }
+    .avatar {
+      flex: 0 0 40px; width: 40px; height: 40px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 750; font-size: 14px; color: #121317; letter-spacing: 0;
+    }
+    .col { min-width: 0; max-width: calc(100% - 50px); }
+    .turn.user .col { display: flex; flex-direction: column; align-items: flex-end; }
+    .who { font-size: 12px; color: var(--muted); margin: 0 2px 5px; }
+    .who b { font-weight: 650; color: var(--who, var(--text)); }
     .card {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      display: inline-block; max-width: 100%;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 4px 14px 14px 14px;
       padding: 10px 12px; white-space: pre-wrap; word-break: break-word;
+      box-shadow: 0 1px 0 rgba(0,0,0,.25);
     }
-    .turn.user .card { border-color: #2a3a55; }
-    .turn.user .who b { color: var(--user); }
+    .turn.user .card {
+      border-radius: 14px 4px 14px 14px;
+      background: #1e4a9a;
+      border-color: #2b6fd6;
+      color: #f4f7ff;
+    }
+    .turn[data-agent="experimenter"] .card {
+      background: color-mix(in srgb, var(--experimenter) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--experimenter) 42%, var(--line));
+    }
+    .turn[data-agent="experiment-designer"] .card {
+      background: color-mix(in srgb, var(--designer) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--designer) 42%, var(--line));
+    }
+    .turn[data-agent="design-reviewer"] .card {
+      background: color-mix(in srgb, var(--design) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--design) 42%, var(--line));
+    }
+    .turn[data-agent="patch-reviewer"] .card {
+      background: color-mix(in srgb, var(--patch) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--patch) 42%, var(--line));
+    }
+    .turn[data-agent="divergence-reviewer"] .card {
+      background: color-mix(in srgb, var(--divergence) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--divergence) 42%, var(--line));
+    }
+    .turn[data-agent="paper-reviewer"] .card {
+      background: color-mix(in srgb, var(--paper) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--paper) 42%, var(--line));
+    }
+    .turn[data-agent="protocol-gate"] .card {
+      background: color-mix(in srgb, var(--gate) 16%, var(--panel));
+      border-color: color-mix(in srgb, var(--gate) 42%, var(--line));
+    }
     .think {
       color: var(--muted); font-size: 12px; border-left: 2px solid var(--line);
       padding: 4px 0 4px 10px; margin-bottom: 8px; white-space: pre-wrap;
@@ -110,11 +175,21 @@
       font-size: 10px; border-radius: 999px; padding: 1px 8px; border: 1px solid currentColor;
     }
     .role.experimenter { color: var(--experimenter); }
+    .role.experiment-designer { color: var(--designer); }
     .role.design-reviewer { color: var(--design); }
     .role.patch-reviewer { color: var(--patch); }
     .role.divergence-reviewer { color: var(--divergence); }
     .role.paper-reviewer { color: var(--paper); }
+    .role.protocol-gate { color: var(--gate); }
     .role.user { color: var(--user); }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 8px 12px; width: 100%;
+      color: var(--muted); font-size: 11px; margin-top: 2px;
+    }
+    .legend i {
+      display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+      margin-right: 4px; vertical-align: middle;
+    }
     .pre {
       margin: 0; padding: 8px 10px 10px; border-top: 1px solid var(--line);
       font: 12px/1.4 "Cascadia Mono", Consolas, monospace; white-space: pre-wrap;
@@ -130,7 +205,7 @@
 <body>
   <div id="app">
     <header>
-      <h1>Agent <span>trace</span></h1>
+      <h1>Agent <span>群聊</span></h1>
       <label class="btn file">打开 JSONL<input id="file" type="file" accept=".jsonl,.json" multiple /></label>
       <button class="btn" id="reload" type="button">刷新会话列表</button>
       <input id="q" type="search" placeholder="搜索文本 / 工具名 / 路径" />
@@ -152,21 +227,51 @@
   <script>
     const ROLE_FROM_SKILL = {
       "experiment-agent": "experimenter",
+      "experiment-designer": "experiment-designer",
       "design-reviewer": "design-reviewer",
       "patch-reviewer": "patch-reviewer",
       "divergence-reviewer": "divergence-reviewer",
       "paper-reviewer": "paper-reviewer",
     };
-    const ROLE_LABEL = {
-      user: "用户",
-      experimenter: "实验者",
-      "design-reviewer": "设计审查",
-      "patch-reviewer": "补丁审查",
-      "divergence-reviewer": "发散审查",
-      "paper-reviewer": "论文对照",
-      "protocol-gate": "协议闸门",
+    const ROLE_META = {
+      user: { label: "用户", short: "我", color: "#5b9dff", bubble: "#1a3f86", border: "#3d7be8" },
+      experimenter: { label: "实验者", short: "实", color: "#f0b429", bubble: "#2c2618", border: "#7a5c1e" },
+      "experiment-designer": { label: "设计者", short: "设", color: "#3dcc9a", bubble: "#17332a", border: "#2a8a68" },
+      "design-reviewer": { label: "设计审查", short: "审", color: "#2ec4d6", bubble: "#153238", border: "#1e7f8c" },
+      "patch-reviewer": { label: "补丁审查", short: "补", color: "#c084fc", bubble: "#2a1d38", border: "#7a4fb0" },
+      "divergence-reviewer": { label: "发散审查", short: "散", color: "#ff8c42", bubble: "#332218", border: "#a85a28" },
+      "paper-reviewer": { label: "论文对照", short: "论", color: "#7aa2ff", bubble: "#1a2744", border: "#3d5aa8" },
+      "protocol-gate": { label: "协议闸门", short: "闸", color: "#8b9099", bubble: "#24262c", border: "#5a5e66" },
     };
-    const FILTERS = ["all", "experimenter", "design-reviewer", "patch-reviewer", "divergence-reviewer", "reviews"];
+    const ROLE_LABEL = Object.fromEntries(Object.entries(ROLE_META).map(([k, v]) => [k, v.label]));
+    const FILTERS = [
+      "all", "user", "experimenter", "experiment-designer",
+      "design-reviewer", "patch-reviewer", "divergence-reviewer", "paper-reviewer", "reviews",
+    ];
+    const NAME_PREFIX = [
+      ["experiment-designer", "experiment-designer"],
+      ["designer-clarify", "experiment-designer"],
+      ["designer", "experiment-designer"],
+      ["design-reviewer", "design-reviewer"],
+      ["patch-reviewer", "patch-reviewer"],
+      ["divergence-reviewer", "divergence-reviewer"],
+      ["paper-reviewer", "paper-reviewer"],
+      ["protocol-gate", "protocol-gate"],
+      ["design", "design-reviewer"],
+      ["patch", "patch-reviewer"],
+      ["divergence", "divergence-reviewer"],
+      ["paper", "paper-reviewer"],
+    ];
+
+    function roleMeta(id) {
+      return ROLE_META[id] || {
+        label: id || "?",
+        short: String(id || "?").slice(0, 1),
+        color: "#8b9099",
+        bubble: "#24262c",
+        border: "#3a3d46",
+      };
+    }
 
     const state = {
       sessions: [],
@@ -197,23 +302,18 @@
       return ROLE_FROM_SKILL[m[1]] || null;
     }
 
+    function roleFromFilename(name) {
+      const base = String(name || "").toLowerCase().replace(/\.(md|json)$/, "");
+      for (const [pre, role] of NAME_PREFIX) {
+        if (base === pre || base.startsWith(pre + "-")) return role;
+      }
+      return null;
+    }
+
     function fileRole(path) {
       const n = normPath(path).toLowerCase();
-      const v = n.match(/reviews\/verdicts\/([a-z-]+)-/);
-      if (v) {
-        if (v[1] === "design") return "design-reviewer";
-        if (v[1] === "patch") return "patch-reviewer";
-        if (v[1] === "divergence") return "divergence-reviewer";
-        if (v[1] === "paper") return "paper-reviewer";
-        return v[1];
-      }
-      const pk = n.match(/reviews\/packets\/([a-z-]+)-/);
-      if (pk) {
-        if (pk[1] === "design") return "design-reviewer";
-        if (pk[1] === "patch") return "patch-reviewer";
-        if (pk[1] === "divergence") return "divergence-reviewer";
-        if (pk[1] === "paper") return "paper-reviewer";
-      }
+      const hit = n.match(/reviews\/(?:verdicts|packets)\/([^/]+)$/);
+      if (hit) return roleFromFilename(hit[1]);
       return skillRole(path);
     }
 
@@ -312,12 +412,15 @@
             const args = part.arguments || {};
             const path = argPath(args);
             const tagged = fileRole(path);
-            if (skillRole(path)) current = skillRole(path);
+            const hat = skillRole(path);
+            if (hat) {
+              current = hat;
+              turnAgent = hat;
+            }
             if (tagged && normPath(path).toLowerCase().includes("/reviews/verdicts/")) {
               current = "experimenter";
             }
             const agent = tagged || current;
-            if (!turnAgent || turnAgent === "experimenter") turnAgent = agent;
             tools.push({
               id: part.id,
               name: part.name || "",
@@ -402,6 +505,18 @@
         });
         el.filters.appendChild(btn);
       }
+      const legend = document.createElement("div");
+      legend.className = "legend";
+      for (const [id, meta] of Object.entries(ROLE_META)) {
+        if (id === "protocol-gate") continue;
+        const span = document.createElement("span");
+        const dot = document.createElement("i");
+        dot.style.background = meta.color;
+        span.appendChild(dot);
+        span.appendChild(document.createTextNode(meta.label));
+        legend.appendChild(span);
+      }
+      el.filters.appendChild(legend);
     }
 
     function renderSessions() {
@@ -434,26 +549,34 @@
       }
       let lastAgent = "";
       for (const turn of turns) {
-        if (turn.kind === "assistant" && turn.agent && turn.agent !== lastAgent) {
-          const div = document.createElement("div");
-          div.className = "div";
-          div.textContent = ROLE_LABEL[turn.agent] || turn.agent;
-          el.log.appendChild(div);
-          lastAgent = turn.agent;
-        }
+        const agent = turn.kind === "user" ? "user" : (turn.agent || "experimenter");
+        const meta = roleMeta(agent);
         const wrap = document.createElement("div");
-        wrap.className = "turn " + turn.kind;
+        wrap.className = "turn " + turn.kind + (agent === lastAgent ? " cont" : "");
         wrap.dataset.id = turn.id;
+        wrap.dataset.agent = agent;
+        wrap.style.setProperty("--who", meta.color);
+
+        const av = document.createElement("div");
+        av.className = "avatar";
+        av.textContent = meta.short;
+        av.style.background = meta.color;
+
+        const col = document.createElement("div");
+        col.className = "col";
         const who = document.createElement("div");
         who.className = "who";
         const b = document.createElement("b");
-        b.textContent = turn.kind === "user" ? "用户" : (ROLE_LABEL[turn.agent] || turn.agent);
+        b.textContent = meta.label;
         who.appendChild(b);
         const ts = String(turn.ts || "");
-        if (ts) who.appendChild(document.createTextNode("  " + ts.replace("T", " ").replace("Z", "")));
-        wrap.appendChild(who);
+        if (ts) who.appendChild(document.createTextNode("  " + ts.replace("T", " ").replace("Z", " UTC")));
+        col.appendChild(who);
+
         const card = document.createElement("div");
         card.className = "card";
+        card.style.background = meta.bubble;
+        card.style.borderColor = meta.border;
         if (turn.thinking) {
           const det = document.createElement("details");
           det.className = "think";
@@ -482,8 +605,11 @@
           box.appendChild(pre);
           card.appendChild(box);
         }
-        wrap.appendChild(card);
+        col.appendChild(card);
+        wrap.appendChild(av);
+        wrap.appendChild(col);
         el.log.appendChild(wrap);
+        lastAgent = agent;
       }
       state.steps = [];
       for (const turn of turns) {

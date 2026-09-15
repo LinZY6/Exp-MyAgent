@@ -77,6 +77,9 @@ function invoke(action: string, params: Record<string, unknown>, project: string
 			env: {
 				...process.env,
 				EXPMEM_ROOT: root,
+				...(process.env.EXPERIMENT_LAB || readLabSession().lab
+					? { EXPERIMENT_LAB: process.env.EXPERIMENT_LAB || readLabSession().lab || "" }
+					: {}),
 				PYTHONPATH: pythonPath(),
 				PYTHONUTF8: "1",
 				PYTHONIOENCODING: "utf-8",
@@ -113,9 +116,10 @@ const searchPapers = defineTool({
 	name: "search_papers",
 	label: "Search papers",
 	description:
-		"Search arXiv Atom API for title/abstract (not the experiment DB). Often 429/timeout. " +
+		"Search literature (OpenAlex first, arXiv Atom last) for title/abstract (not the experiment DB). " +
 		"Call at most once per turn; never fire several search_papers in parallel. " +
-		"On 429/timeout/irrelevant hits, stop searching and fetch_paper a known id or random_paper. " +
+		"On 429/timeout, stop searching this turn. Do not invent arXiv ids. " +
+		"Do not post requirements with empty papers. Retry next turn or fetch_paper a known id from DIRECTIONS. " +
 		"Do not scrape arxiv.org/search HTML.",
 	parameters: Type.Object({
 		query: Type.String({ description: "arXiv search query" }),

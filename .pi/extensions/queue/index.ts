@@ -93,14 +93,15 @@ const queuePut = defineTool({
 	name: "queue_put",
 	label: "Enqueue experiment",
 	description:
-		"Add or update an experiment idea. proposed_by must be experiment-designer " +
-		"(or divergence-reviewer for leftover audit). The experimenter must not call this " +
-		"to invent the next cut. Does not create a DAG node and does not fit.",
+		"Add or update a runnable experiment after the Designer posted a requirement. " +
+		"proposed_by must be experimenter and requirement_id is required. " +
+		"Does not create a DAG node and does not fit.",
 	parameters: Type.Object({
 		title: Type.String({ description: "Short name, e.g. poly3 small ridge" }),
 		proposed_by: Type.String({
-			description: "experiment-designer, or divergence-reviewer when catching leftovers",
+			description: "Must be experimenter",
 		}),
+		requirement_id: Type.String({ description: "id from designer post_requirement" }),
 		priority: Type.Optional(Type.Number({ description: "Integer; higher = sooner (default 100)" })),
 		reason: Type.Optional(Type.String()),
 		kind: Type.Optional(Type.String()),
@@ -123,8 +124,8 @@ const queueSet = defineTool({
 	name: "queue_set",
 	label: "Update queue task",
 	description:
-		"Experimenter: status, experiment_id, note, blocked_on after a run. " +
-		"Designer: priority/title/reason/spec with proposed_by=experiment-designer.",
+		"Experimenter: status after a bounce fix; Reviewer: status, experiment_id, note after a run. " +
+		"Changing title/spec/priority needs proposed_by=experimenter.",
 	parameters: Type.Object({
 		id: Type.String(),
 		proposed_by: Type.Optional(
@@ -147,8 +148,8 @@ const queueTake = defineTool({
 	label: "Take next queue task",
 	description:
 		"Return the highest-priority queued task and mark it running. Does not run the fit. " +
-		"empty=true is not a campaign-stop: if blocked remains, implement it; otherwise call Designer. " +
-		"If something is already running, returns that instead. peek=true lists the next task without claiming it.",
+		"empty=true is not a campaign-stop: main loop call_divergence or call_designer. " +
+		"The Reviewer is the one who takes. If something is already running, returns that instead. peek=true lists without claiming.",
 	parameters: Type.Object({
 		peek: Type.Optional(Type.Boolean()),
 	}),

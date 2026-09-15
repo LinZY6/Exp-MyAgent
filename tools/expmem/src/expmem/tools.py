@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,30 @@ def _as_list(raw: Any) -> list[str]:
     return [str(raw).strip()]
 
 
+def _hat_block(action: str) -> dict[str, Any] | None:
+    """Refuse create/complete unless the campaign hat is reviewer. No hat file: scripts/tests pass."""
+    raw = (os.environ.get("EXPERIMENT_LAB") or os.environ.get("EXPMEM_ROOT") or "").strip()
+    if not raw:
+        return None
+    lab = Path(raw)
+    hat_file = lab / "reviews" / "hat.json"
+    if not hat_file.is_file():
+        return None
+    try:
+        obj = json.loads(hat_file.read_text(encoding="utf-8") or "{}")
+    except (OSError, json.JSONDecodeError):
+        return None
+    role = str((obj or {}).get("role") or "").strip()
+    if not role or role == "reviewer":
+        return None
+    return {
+        "ok": False,
+        "error": f"{action} requires hat=reviewer; current hat={role}. call_reviewer first.",
+        "hat": role,
+        "must": "call_reviewer",
+    }
+
+
 def handle(root: str, action: str, params: dict[str, Any], *, project: str = "default") -> dict[str, Any]:
     collection = _collection(params, project)
     if action in {"search_experiments", "retrieve_experiments", "retrieve"}:
@@ -95,8 +120,15 @@ def handle(root: str, action: str, params: dict[str, Any], *, project: str = "de
         )
     lab = ExperimentLab(Path(root), project=collection)
     if action in {"search_papers", "literature_search"}:
-        return lab.search_papers(str(params.get("query") or ""), limit=int(params.get("limit") or 5))
+        return lab.search_papers(
+            str(params.get("query") or ""),
+            limit=int(params.get("limit") or 5),
+            timeout=int(params.get("timeout") or 20),
+        )
     if action in {"create_experiment", "create"}:
+        blocked = _hat_block("create_experiment")
+        if blocked:
+            return blocked
         expected = params.get("expected") or params.get("expected_note") or ""
         return lab.create(
             kind=str(params.get("kind") or "other"),
@@ -109,6 +141,9 @@ def handle(root: str, action: str, params: dict[str, Any], *, project: str = "de
             node_id=str(params.get("id") or params.get("experiment_id") or ""),
         )
     if action in {"complete_experiment", "complete"}:
+        blocked = _hat_block("complete_experiment")
+        if blocked:
+            return blocked
         metrics = params.get("metrics") or {}
         if isinstance(metrics, str) and metrics.strip():
             metrics = json.loads(metrics)

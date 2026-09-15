@@ -2,21 +2,37 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "queue" / "src"))
+sys.path.insert(0, str(ROOT / "tools" / "lab" / "src"))
 
 from exqueue.tools import handle  # noqa: E402
 
-DESIGNER = "experiment-designer"
+EXPERIMENTER = "experimenter"
+
+
+def _req(lab: str, rid: str, change: str) -> str:
+    folder = Path(lab) / "reviews" / "requirements"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{rid}.json").write_text(
+        json.dumps({"id": rid, "change": change, "kind": "add_module", "status": "open", "reason": change}) + "\n",
+        encoding="utf-8",
+    )
+    return rid
 
 
 def _put(lab: str, **kwargs):
-    kwargs.setdefault("proposed_by", DESIGNER)
+    kwargs.setdefault("proposed_by", EXPERIMENTER)
     kwargs.setdefault("lab", lab)
     kwargs.setdefault("action", "put")
+    if "requirement_id" not in kwargs:
+        rid = "r_" + kwargs.get("title", "x").split()[0]
+        _req(lab, rid, kwargs.get("title") or "change")
+        kwargs["requirement_id"] = rid
     return handle(kwargs)
 
 
@@ -33,7 +49,7 @@ def test_priority_take_and_bump(tmp_path: Path):
     assert first["taken"]["title"] == "C drop_x4"
     assert first["taken"]["status"] == "running"
     handle({"action": "set", "lab": lab, "id": first["taken"]["id"], "status": "done"})
-    handle({"action": "set", "lab": lab, "id": b["task"]["id"], "priority": 50, "proposed_by": DESIGNER})
+    handle({"action": "set", "lab": lab, "id": b["task"]["id"], "priority": 50, "proposed_by": EXPERIMENTER})
     d = _put(lab, title="D poly3 small alpha", priority=80, degree=3, alpha=0.1)
     assert d["ok"]
     nxt = handle({"action": "take", "lab": lab})
@@ -53,15 +69,19 @@ def test_take_waits_if_running(tmp_path: Path):
     assert t2["taken"]["id"] == t1["taken"]["id"]
 
 
-def test_experimenter_cannot_put_or_reprioritize(tmp_path: Path):
+def test_designer_cannot_put_experimenter_needs_requirement(tmp_path: Path):
     lab = str(tmp_path / "lab3")
     Path(lab).mkdir(parents=True)
     denied = handle({"action": "put", "lab": lab, "title": "sneak", "priority": 99})
     assert denied["ok"] is False
     also = handle(
-        {"action": "put", "lab": lab, "title": "sneak", "priority": 99, "proposed_by": "experimenter"}
+        {"action": "put", "lab": lab, "title": "sneak", "priority": 99, "proposed_by": "experiment-designer"}
     )
     assert also["ok"] is False
+    missing = handle(
+        {"action": "put", "lab": lab, "title": "real", "priority": 1, "proposed_by": EXPERIMENTER}
+    )
+    assert missing["ok"] is False
     ok = _put(lab, title="real", priority=1)
     assert ok["ok"] is True
     bump = handle({"action": "set", "lab": lab, "id": ok["task"]["id"], "priority": 500})
@@ -82,6 +102,26 @@ def test_take_blocked_is_not_empty(tmp_path: Path):
     assert "Not a campaign-stop" in out["hint"]
 
 
+def test_hat_blocks_put_and_take(tmp_path: Path):
+    from lab.hat import write_hat
+
+    lab = str(tmp_path / "lab5")
+    Path(lab).mkdir(parents=True)
+    write_hat(Path(lab), "experiment-designer")
+    denied = _put(lab, title="while designer", priority=1)
+    assert denied["ok"] is False
+    assert denied.get("hat") == "experiment-designer"
+    write_hat(Path(lab), "experimenter")
+    ok = _put(lab, title="ok hat", priority=1)
+    assert ok["ok"] is True
+    sneaky_take = handle({"action": "take", "lab": lab})
+    assert sneaky_take["ok"] is False
+    write_hat(Path(lab), "reviewer")
+    taken = handle({"action": "take", "lab": lab})
+    assert taken["ok"] is True
+    assert taken["taken"]["title"] == "ok hat"
+
+
 def test_no_expmem_import():
     src = ROOT / "tools" / "queue" / "src" / "exqueue"
     for p in src.glob("*.py"):
@@ -100,10 +140,12 @@ if __name__ == "__main__":
         print("ok bump")
         test_take_waits_if_running(base / "r")
         print("ok running")
-        test_experimenter_cannot_put_or_reprioritize(base / "s")
+        test_designer_cannot_put_experimenter_needs_requirement(base / "s")
         print("ok putter gate")
         test_take_blocked_is_not_empty(base / "b")
         print("ok blocked take")
+        test_hat_blocks_put_and_take(base / "h")
+        print("ok hat")
         test_no_expmem_import()
         print("ok isolation")
     print("all passed")

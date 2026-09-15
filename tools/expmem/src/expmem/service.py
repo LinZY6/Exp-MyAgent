@@ -43,17 +43,18 @@ class ExperimentLab:
     def __init__(self, root: Union[str, Path], project: str = "default"):
         self.store = ExperimentStore(Path(root), project=project)
 
-    def search_papers(self, query: str, *, limit: int = 5) -> dict[str, Any]:
+    def search_papers(self, query: str, *, limit: int = 5, timeout: int = 20) -> dict[str, Any]:
         try:
-            hits = search_literature(query, limit=limit)
+            hits = search_literature(query, limit=limit, timeout=max(8, min(int(timeout), 45)))
             return {"ok": True, "hits": hits, "count": len(hits)}
         except Exception as e:
             return {
                 "ok": False,
                 "error": str(e),
                 "hits": [],
-                "hint": "Atom search only. Do not retry search_papers in a loop or in parallel. "
-                "Call fetch_paper with a known arXiv id, or random_paper. "
+                "hint": "OpenAlex then arXiv Atom both failed. Do not retry search_papers this turn. "
+                "Do not invent arXiv ids. Do not post requirements with empty papers. "
+                "Retry deep_research next turn, or fetch_paper a known id from DIRECTIONS. "
                 "Do not scrape arxiv.org/search HTML.",
             }
 

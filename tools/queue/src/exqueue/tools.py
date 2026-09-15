@@ -9,7 +9,13 @@ from typing import Any
 
 from exqueue.store import QUEUE_NAME, STATUSES, load, new_id, ranked, save, utc_now
 
-PUTTERS = ("experiment-designer", "divergence-reviewer")
+try:
+    from lab.hat import require_hat
+except ImportError:  # pragma: no cover
+    def require_hat(lab: Path, allowed, action: str):  # type: ignore[misc]
+        return None
+
+PUTTERS = ("experimenter",)
 SCHEME_KEYS = ("priority", "title", "reason")
 
 REPO = Path(__file__).resolve().parents[4]
@@ -59,15 +65,40 @@ def _proposed_by(params: dict[str, Any]) -> str:
     return str(params.get("proposed_by") or "").strip()
 
 
+def _requirement_path(lab: Path, rid: str) -> Path:
+    return lab / "reviews" / "requirements" / f"{rid}.json"
+
+
+def _load_requirement(lab: Path, rid: str) -> dict[str, Any] | None:
+    path = _requirement_path(lab, rid)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _mark_requirement_queued(lab: Path, rid: str, task_id: str) -> None:
+    path = _requirement_path(lab, rid)
+    data = _load_requirement(lab, rid)
+    if not data:
+        return
+    data["status"] = "queued"
+    data["queue_task_id"] = task_id
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def _require_putter(params: dict[str, Any]) -> dict[str, Any] | None:
     who = _proposed_by(params)
     if who not in PUTTERS:
         return {
             "ok": False,
             "error": (
-                "queue_put requires proposed_by=experiment-designer "
-                "(or divergence-reviewer for leftover audit). "
-                "The experimenter must not enqueue a new plan."
+                "queue_put requires proposed_by=experimenter and a designer requirement_id. "
+                "The designer posts requirements; the reviewer takes and runs. "
+                "Do not enqueue a plan the designer did not write."
             ),
         }
     return None
@@ -93,40 +124,60 @@ def put(params: dict[str, Any]) -> dict[str, Any]:
     blocked = _require_putter(params)
     if blocked:
         return blocked
-    title = str(params.get("title") or params.get("change") or "").strip()
+    hat = require_hat(lab, {"experimenter"}, "queue_put")
+    if hat:
+        return hat
+    rid = str(params.get("requirement_id") or "").strip()
+    if not rid:
+        return {"ok": False, "error": "requirement_id required (designer post_requirement id)"}
+    req = _load_requirement(lab, rid)
+    if not req:
+        return {"ok": False, "error": f"unknown requirement_id={rid}; designer must post_requirement first"}
+    title = str(params.get("title") or params.get("change") or req.get("change") or "").strip()
     if not title:
         return {"ok": False, "error": "title or change required"}
     tasks = load(lab)
     tid = str(params.get("id") or "").strip() or new_id()
     existing = next((t for t in tasks if t.get("id") == tid), None)
-    spec = _spec(params)
+    spec = {}
+    for key in ("model", "features", "degree", "alpha", "kind", "upstream"):
+        if req.get(key) not in (None, ""):
+            spec[key] = req[key]
+    knobs = req.get("knobs")
+    if isinstance(knobs, dict):
+        spec.update({k: v for k, v in knobs.items() if v not in (None, "")})
+    if req.get("change"):
+        spec["change"] = req["change"]
+    if req.get("reason"):
+        spec["rationale"] = req["reason"]
+    spec.update(_spec(params))
     who = _proposed_by(params)
     if existing:
         existing["title"] = title
         existing["priority"] = _as_int(params.get("priority"), int(existing.get("priority") or 100))
         existing["proposed_by"] = who
+        existing["requirement_id"] = rid
         if params.get("reason") not in (None, ""):
             existing["reason"] = str(params.get("reason"))
         if params.get("note") not in (None, ""):
             existing["note"] = str(params.get("note"))
-        if spec:
-            merged = dict(existing.get("spec") or {})
-            merged.update(spec)
-            existing["spec"] = merged
+        existing["spec"] = spec
         existing["updated_at"] = utc_now()
         save(lab, tasks)
+        _mark_requirement_queued(lab, rid, str(existing.get("id") or tid))
         return {"ok": True, "upserted": True, "task": existing, "lab": str(lab)}
     task = {
         "id": tid,
         "title": title,
         "priority": _as_int(params.get("priority"), 100),
         "status": "queued",
-        "reason": str(params.get("reason") or ""),
+        "reason": str(params.get("reason") or req.get("reason") or ""),
         "note": str(params.get("note") or ""),
         "spec": spec,
         "proposed_by": who,
+        "requirement_id": rid,
         "experiment_id": str(params.get("experiment_id") or ""),
-        "blocked_on": str(params.get("blocked_on") or ""),
+        "blocked_on": str(params.get("blocked_on") or req.get("blocked_on") or ""),
         "created_at": utc_now(),
         "updated_at": utc_now(),
     }
@@ -134,6 +185,7 @@ def put(params: dict[str, Any]) -> dict[str, Any]:
         task["status"] = "blocked"
     tasks.append(task)
     save(lab, tasks)
+    _mark_requirement_queued(lab, rid, tid)
     return {"ok": True, "upserted": False, "task": task, "lab": str(lab)}
 
 
@@ -151,12 +203,18 @@ def set_task(params: dict[str, Any]) -> dict[str, Any]:
         blocked = _require_putter(params)
         if blocked:
             blocked["error"] = (
-                "changing title/spec/priority is the Designer's plan; "
-                "pass proposed_by=experiment-designer (or divergence-reviewer). "
-                "The experimenter may only set status, experiment_id, note, blocked_on."
+                "changing title/spec/priority needs proposed_by=experimenter "
+                "(the code author). Reviewer may only set status, experiment_id, note, blocked_on."
             )
             return blocked
+        hat = require_hat(lab, {"experimenter"}, "queue_set")
+        if hat:
+            return hat
         task["proposed_by"] = _proposed_by(params)
+    else:
+        hat = require_hat(lab, {"experimenter", "reviewer"}, "queue_set")
+        if hat:
+            return hat
     if params.get("priority") not in (None, ""):
         task["priority"] = _as_int(params.get("priority"), 0)
     if params.get("status") not in (None, ""):
@@ -179,6 +237,9 @@ def set_task(params: dict[str, Any]) -> dict[str, Any]:
 
 def take(params: dict[str, Any]) -> dict[str, Any]:
     lab = _lab_dir(params)
+    hat = require_hat(lab, {"reviewer"}, "queue_take")
+    if hat:
+        return hat
     tasks = load(lab)
     peek = bool(params.get("peek"))
     running = [t for t in tasks if t.get("status") == "running"]
@@ -212,8 +273,8 @@ def take(params: dict[str, Any]) -> dict[str, Any]:
             "lab": str(lab),
             "hint": (
                 "no queued or blocked items; this is not a campaign-stop. "
-                "Switch to Experiment Designer (queue_put). "
-                "Call Divergence only if you were about to write a stop report."
+                "Main loop: call_divergence (if the DAG has history) or call_designer (fresh lab). "
+                "Do not ask the user."
             ),
         }
     top = queued[0]

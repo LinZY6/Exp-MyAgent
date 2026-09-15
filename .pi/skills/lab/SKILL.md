@@ -11,7 +11,9 @@ When the user describes a **new project** (new function, new dataset, "在某某
 2. After they name a folder, call `use_lab` **without** `force`. Show them `resolved`, `safe`, `entries`, and any `error`.
 3. Wait for an explicit yes ("就这个" / "确认" / "用这个目录").
 4. Call `use_lab` again with the same path and `force=true`. That writes this lab's CHARTER / src / **empty** jsonl. Do **not** pass `seed=true` unless the user asked for the Friedman #1 demo DAG. Do **not** edit the repo `CHARTER.md`.
-5. Then follow `.pi/agents/ROSTER.md`: Designer fills the queue only when it is empty; Experimenter takes and runs. Do not ask which experiment to try. Divergence is only for campaign-stop. The ledger is `<lab>/fn_fit/experiments.jsonl`.
+5. Then follow `.pi/agents/ROSTER.md`: `campaign_gate.must` names the next agent tool (`call_designer` / `call_experimenter` / `call_reviewer` / `call_divergence`). Do not ask which experiment to try. The ledger is `<lab>/fn_fit/experiments.jsonl` unless this lab's CHARTER names another collection.
+
+Do **not** copy a `run_*` tool's variant enum (`no_storage|greedy|lp|…`) into this lab's CHARTER as "allowed experiments". That list is a runner CLI, not the campaign universe. The Designer proposes from papers + DAG; CHARTER only freezes task / data / metric / constraints.
 
 ## Bounds (every edit)
 

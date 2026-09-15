@@ -384,9 +384,9 @@ Python **不会**用队列自动点下一刀；**LLM** 把想法放进 lab 的 `
 
 ---
 
-## 6. 多角色提示词（审查闸）
+## 6. 多角色（主 loop 把 Agent 当工具）
 
-角色与提示词路径见 `.pi/agents/ROSTER.md`。材料包约定 `.pi/agents/PACKET.md`。现在是 **同一 Pi 会话里换 skill + 白名单材料**，不是多进程、也不是 Python 把审查串成循环。场停前必须有 Divergence 的 `exhausted` 结论文件。
+角色总表 `.pi/agents/ROSTER.md`。材料包 `.pi/agents/PACKET.md`。主 loop 只调用 `call_designer` / `call_experimenter` / `call_reviewer` / `call_divergence`。设计者 `post_requirement` 并保留记忆；实验者改代码并 `queue_put`；审查者 take / 审 / 跑 / 写 DAG；空队列由发散拦截者先问设计者，`agree_stop` + `record_exhausted` + `ask_user` 成功（`may_yield`）才把话轮交给用户。`agent_done` 写入 `reviews/done/`，不再盖住 exhausted。同一 Pi 会话、工具闸门，不是 Python 选下一刀。
 
 ## 7. 还没做
 
@@ -395,4 +395,4 @@ Python **不会**用队列自动点下一刀；**LLM** 把想法放进 lab 的 `
 - 另外几条研究方向用同一套「论文 → 协议 → DAG → 出题」
 - `viz`；通用 SSH/`cwd+command` 的 run 包（fnfit 不是那个）
 - GitHub 远端：本地已有提交，本机访问 `github.com:443` 不稳定，push 需在能连 GitHub 的网络执行
-- 审查角色各自开独立 Pi 会话（现在是同一会话里 `read` 对应 `SKILL.md`）
+- 审查角色各自开独立 Pi 会话（现在仍是同一会话里 `call_*` 换帽子 + 磁盘信封）
