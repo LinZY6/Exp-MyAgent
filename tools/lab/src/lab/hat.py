@@ -31,7 +31,7 @@ MUST_FOR_ACTION = {
     "designer_memory_note": "call_designer",
     "record_exhausted": "call_divergence",
     "ask_designer": "call_experimenter",
-    "ask_user": "call_divergence",
+    "ask_user": "ask_user",
 }
 
 

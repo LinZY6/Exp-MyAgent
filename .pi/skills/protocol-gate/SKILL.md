@@ -23,7 +23,8 @@ description: Hard lab-boundary and protocol freeze checks (not an LLM reviewer).
 ## 每次 run 前（仅审查者）
 
 - `protocol_check`。`src/` 与 `protocol.json` 的 SHA-256 必须等于 baseline，或某份 `reviews/verdicts/review-*.json`（`role=reviewer` 或旧的 `patch-reviewer`）里 `verdict=approve` **且** `code_sha256` 等于当前 `lab_code_hash`。
+- `complete_experiment` 还会对照需求上的 `hard_checks` / `expect_vs_parent` 与父节点主指标。失败则拒写入 DAG（`contrast_violation`），不是科学结论。
 
 ## 每次想场停之前
 
-`campaign_gate`。`may_stop=false` → 调用它返回的 `must`（`call_designer` / `call_experimenter` / `call_reviewer` / `call_divergence`）。`may_stop=true` 但 `may_yield=false` → 必须 `ask_user`，不要写收工报告。想问用户必须 `ask_user`。空队列先 `call_divergence`，不是直接问用户。
+`campaign_gate`。`may_stop=false` → 调用它返回的 `must`（`call_designer` / `call_experimenter` / `call_reviewer` / `ask_user`）。`must=ask_user` → 主 loop 把汇总放进 `ask_user`；工具会 spawn 拦截者子进程，拦截者再 `task` 设计者。他们不停则拦截者充当用户打回主 loop。`may_yield=true` 才问真人。想问用户必须 `ask_user`。空队列不要再戴 `call_divergence` 帽子。

@@ -386,7 +386,7 @@ Python **不会**用队列自动点下一刀；**LLM** 把想法放进 lab 的 `
 
 ## 6. 多角色（主 loop 把 Agent 当工具）
 
-角色总表 `.pi/agents/ROSTER.md`。材料包 `.pi/agents/PACKET.md`。主 loop 只调用 `call_designer` / `call_experimenter` / `call_reviewer` / `call_divergence`。设计者 `post_requirement` 并保留记忆；实验者改代码并 `queue_put`；审查者 take / 审 / 跑 / 写 DAG；空队列由发散拦截者先问设计者，`agree_stop` + `record_exhausted` + `ask_user` 成功（`may_yield`）才把话轮交给用户。`agent_done` 写入 `reviews/done/`，不再盖住 exhausted。同一 Pi 会话、工具闸门，不是 Python 选下一刀。
+角色总表 `.pi/agents/ROSTER.md`。材料包 `.pi/agents/PACKET.md`。主 loop 只调用 `call_designer` / `call_experimenter` / `call_reviewer` / `call_divergence`。设计者 `post_requirement` 并保留记忆；实验者改代码并 `queue_put`；审查者 take / 审 / 跑 / 写 DAG；空队列由发散拦截者先问设计者，`agree_stop` + `record_exhausted` + `ask_user` 成功（`may_yield`）才把话轮交给用户。`agent_done` 写入 `reviews/done/`，不再盖住 exhausted。同一 Pi 会话、工具闸门，不是 Python 选下一刀。`complete_experiment` 执行需求上的对照合同（`held_fixed` / `expect_vs_parent` / `hard_checks`）：放松后主指标变差或硬门未过则拒写入 DAG；bounce 不得授权拆硬门。审查者不做因果分析。
 
 ## 7. 还没做
 

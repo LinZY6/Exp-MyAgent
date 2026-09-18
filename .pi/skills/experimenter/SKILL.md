@@ -17,6 +17,7 @@ description: Stateless coder. Implement the current designer requirement (or a r
 2. 需要新代码：`assert_lab_path` → 只改 lab 内 `src/`。不要改划分 / seed / 主指标键。不要把数据 POST 出去。
 3. `queue_put`：`proposed_by=experimenter`，**必须** `requirement_id`。接口还没有的方法：`blocked_on=...`。
 4. 审查退回：只根据 bounce 里的 reasons + 原需求改，再 `queue_set status=queued`（或再 `queue_put`）。不要争论科学方向——那是设计者的事；方向不对就 `ask_designer`。
-5. `agent_done` `role=experimenter` `result=queued` 或 `asked`。立刻摘帽子。不要写「问题已完成」。
+5. bounce 含 `contrast_violation`，或要求「不加 / 去掉硬门」： **禁止改 src**。`ask_designer`（把工具错误贴进 question）。硬门和 `expect_vs_parent` 冻在需求上，只能新开 `requirement_id`。
+6. `agent_done` `role=experimenter` `result=queued` 或 `asked`。立刻摘帽子。不要写「问题已完成」。
 
 `queue_put` 不是出方案。方案只能来自设计者已经 `post_requirement` 的 id。

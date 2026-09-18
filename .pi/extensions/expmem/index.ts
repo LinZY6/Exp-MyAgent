@@ -49,8 +49,10 @@ function dataRoot(): string {
 
 function pythonPath(): string {
 	const src = join(repoRoot(), "tools", "expmem", "src");
+	const lab = join(repoRoot(), "tools", "lab", "src");
 	const prev = process.env.PYTHONPATH || "";
-	return prev ? `${src}${delimiter}${prev}` : src;
+	const prefix = `${src}${delimiter}${lab}`;
+	return prev ? `${prefix}${delimiter}${prev}` : prefix;
 }
 
 function invoke(action: string, params: Record<string, unknown>, project: string): string {
@@ -195,7 +197,7 @@ const createExperiment = defineTool({
 const completeExperiment = defineTool({
 	name: "complete_experiment",
 	label: "Complete experiment",
-	description: "Write actual metrics after training. Does not create a node; experiment_id must already exist. If there are no metrics (crash/OOM), the node is dropped and is not a DAG result.",
+	description: "Write actual metrics after training. Does not create a node; experiment_id must already exist. If there are no metrics (crash/OOM), the node is dropped and is not a DAG result. Requirement hard_checks and expect_vs_parent are enforced; a worse primary than the parent under not_worse is refused.",
 	parameters: Type.Object({
 		collection: Type.String({ description: "Which experiment DB under EXPMEM_ROOT" }),
 		experiment_id: Type.String({ description: "Id returned by create_experiment" }),
@@ -205,6 +207,8 @@ const completeExperiment = defineTool({
 		error: Type.Optional(Type.String()),
 		note: Type.Optional(Type.String()),
 		failed: Type.Optional(Type.Boolean({ description: "Run itself failed with no metrics: drop the node from the DAG" })),
+		requirement_id: Type.Optional(Type.String({ description: "Designer requirement id; contrast gate uses this" })),
+		hard_checks: Type.Optional(Type.String({ description: 'JSON object, e.g. {"emergency_zero":true}' })),
 	}),
 	async execute(_id, input) {
 		const project = input.collection || process.env.EXPMEM_PROJECT || "default";

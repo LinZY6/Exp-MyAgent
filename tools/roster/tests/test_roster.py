@@ -118,7 +118,7 @@ def test_reviewer_bounce_and_stop_intercept(tmp_path: Path):
 
     mark_mail_read(lab, bounced["mail"]["id"], {"fixed": True})
     empty = check_stop(lab)
-    assert empty["must"] == "call_divergence"
+    assert empty["must"] == "ask_user"
     too_few = handle(
         {
             "action": "ask_designer",
@@ -186,7 +186,7 @@ def test_reviewer_bounce_and_stop_intercept(tmp_path: Path):
         }
     )
     assert asked["ok"] is True
-    assert asked["mail"]["challenge_round"] >= 3
+    assert asked["mail"]["challenge_round"] >= 2
     stop = handle(
         {
             "action": "designer_reply",
@@ -198,7 +198,7 @@ def test_reviewer_bounce_and_stop_intercept(tmp_path: Path):
             "rejected_proposals": json.dumps(
                 [
                     {"change": "interval boundary relabel", "why": "DIRECTIONS excludes extra solvers"},
-                    {"change": "degradation cost arm", "why": "CHARTER excludes degradation"},
+                    {"change": "degradation cost arm", "why": "DIRECTIONS excludes degradation cost"},
                 ]
             ),
         }
@@ -206,9 +206,11 @@ def test_reviewer_bounce_and_stop_intercept(tmp_path: Path):
     assert stop["ok"] is True
     assert stop["verdict"]["agree_stop"] is True
     still = check_stop(lab)
-    assert still["must"] == "call_divergence"
-    exh = handle({"action": "record_exhausted", "lab": str(lab), "skipped": "[]", "note": "axis exhausted"})
-    assert exh["ok"] is True
+    assert still["must"] == "ask_user"
+    handle({"action": "record_exhausted", "lab": str(lab), "skipped": "[]", "note": "axis exhausted"})
+    from lab.campaign import record_intercept
+
+    record_intercept(lab, stop=True, ask="导出或停止。", raw="")
     done = check_stop(lab)
     assert done["may_stop"] is True
     assert done["may_yield"] is False
@@ -378,7 +380,7 @@ def test_agree_stop_blocked_by_unused_paper(tmp_path: Path):
             "rejected_proposals": json.dumps(
                 [
                     {"change": "dp audit", "why": "DIRECTIONS excludes a second formulation"},
-                    {"change": "shadow-price heuristic", "why": "DAG already covers the heuristic"},
+                    {"change": "shadow-price heuristic", "why": "DIRECTIONS excludes a second heuristic"},
                 ]
             ),
         }
@@ -404,6 +406,190 @@ def test_agree_stop_blocked_by_unused_paper(tmp_path: Path):
     assert ok_exh["ok"] is True
 
 
+def test_call_divergence_requires_summary(tmp_path: Path):
+    lab = tmp_path / "sum"
+    lab.mkdir(parents=True)
+    refused = handle({"action": "call_divergence", "lab": str(lab)})
+    assert refused["ok"] is False
+    assert "summary" in str(refused.get("error") or "").lower()
+    short = handle({"action": "call_divergence", "lab": str(lab), "summary": "too short"})
+    assert short["ok"] is False
+    text = (
+        "Problems 1-4 ran: p1_lp 35126.95, p2 year cost delivered. "
+        "I would tell the user the files are ready and ask whether to stop."
+    )
+    ok = handle({"action": "call_divergence", "lab": str(lab), "summary": text})
+    assert ok["ok"] is True
+    saved = lab / "reviews" / "loop_summary.json"
+    assert saved.is_file()
+    packet = (lab / "reviews" / "packets" / "divergence-interceptor-stop.md").read_text(encoding="utf-8")
+    assert "主 loop 汇总" in packet
+    assert "35126.95" in packet
+
+
+def test_charter_reject_does_not_agree_stop(tmp_path: Path):
+    lab = tmp_path / "charter_stop"
+    lab.mkdir(parents=True)
+    (lab / "fn_fit").mkdir()
+    (lab / "fn_fit" / "experiments.jsonl").write_text(
+        json.dumps(
+            {
+                "id": "n1",
+                "kind": "baseline",
+                "change": "ols",
+                "status": "done",
+                "actual": {"metrics": {"test_mse": 1.0}},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _seed_challenges(lab, 1)
+    asked = handle(
+        {
+            "action": "ask_designer",
+            "lab": str(lab),
+            "from_role": "divergence-interceptor",
+            "question": "why not try these in-scope checks?",
+            "proposals": _proposals(
+                ("ablation", "second solver agreement test"),
+                ("add_module", "price-threshold heuristic"),
+            ),
+        }
+    )
+    assert asked["mail"]["challenge_round"] >= 2
+    stamped = handle(
+        {
+            "action": "designer_reply",
+            "lab": str(lab),
+            "mail_id": asked["mail"]["id"],
+            "kind": "stop_check",
+            "agree_stop": True,
+            "note": "CHARTER forbids both",
+            "rejected_proposals": json.dumps(
+                [
+                    {"change": "second solver agreement test", "why": "CHARTER freezes the solver"},
+                    {"change": "price-threshold heuristic", "why": "CHARTER excludes extra modules"},
+                ]
+            ),
+        }
+    )
+    assert stamped["ok"] is False
+    assert "CHARTER" in str(stamped.get("error") or "")
+    guessed = handle(
+        {
+            "action": "designer_reply",
+            "lab": str(lab),
+            "mail_id": asked["mail"]["id"],
+            "kind": "stop_check",
+            "agree_stop": True,
+            "note": "1-D already flat",
+            "rejected_proposals": json.dumps(
+                [
+                    {
+                        "change": "second solver agreement test",
+                        "why": "DAG n1 ols is flat so a second solver is below noise",
+                    },
+                    {
+                        "change": "price-threshold heuristic",
+                        "why": "DAG n1 ols already implies the heuristic is unnecessary",
+                    },
+                ]
+            ),
+        }
+    )
+    assert guessed["ok"] is False
+    (lab / "fn_fit" / "experiments.jsonl").write_text(
+        (lab / "fn_fit" / "experiments.jsonl").read_text(encoding="utf-8")
+        + json.dumps(
+            {
+                "id": "n2",
+                "kind": "ablation",
+                "change": "second solver agreement test",
+                "status": "done",
+                "actual": {"metrics": {"test_mse": 1.0}},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "id": "n3",
+                "kind": "add_module",
+                "change": "price-threshold heuristic",
+                "status": "done",
+                "actual": {"metrics": {"test_mse": 1.0}},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    covered = handle(
+        {
+            "action": "designer_reply",
+            "lab": str(lab),
+            "mail_id": asked["mail"]["id"],
+            "kind": "stop_check",
+            "agree_stop": True,
+            "note": "in-scope axes already on DAG",
+            "rejected_proposals": json.dumps(
+                [
+                    {"change": "second solver agreement test", "why": "DAG already ran second solver agreement test"},
+                    {"change": "price-threshold heuristic", "why": "DUPLICATE of price-threshold heuristic"},
+                ]
+            ),
+        }
+    )
+    assert covered["ok"] is True
+    exh = handle({"action": "record_exhausted", "lab": str(lab), "skipped": "[]", "note": "covered"})
+    assert exh["ok"] is True
+
+
+def test_ask_user_refuses_deepen_menu(tmp_path: Path):
+    lab = tmp_path / "deepen_q"
+    lab.mkdir(parents=True)
+    (lab / "fn_fit").mkdir()
+    (lab / "fn_fit" / "experiments.jsonl").write_text(
+        json.dumps({"id": "n1", "kind": "baseline", "change": "ols", "status": "done"}) + "\n",
+        encoding="utf-8",
+    )
+    _seed_challenges(lab, 1)
+    asked = handle(
+        {
+            "action": "ask_designer",
+            "lab": str(lab),
+            "from_role": "divergence-interceptor",
+            "question": "why not?",
+            "proposals": _proposals(("ablation", "interval boundary relabel"), ("other", "degradation cost arm")),
+        }
+    )
+    handle(
+        {
+            "action": "designer_reply",
+            "lab": str(lab),
+            "mail_id": asked["mail"]["id"],
+            "kind": "stop_check",
+            "agree_stop": True,
+            "note": "user bound",
+            "rejected_proposals": json.dumps(
+                [
+                    {"change": "interval boundary relabel", "why": "DIRECTIONS excludes extra solvers"},
+                    {"change": "degradation cost arm", "why": "DIRECTIONS excludes degradation cost"},
+                ]
+            ),
+        }
+    )
+    handle({"action": "record_exhausted", "lab": str(lab), "skipped": "[]", "note": "done"})
+    handle({"action": "agent_done", "lab": str(lab), "role": "divergence-interceptor", "result": "exhausted"})
+    from lab.campaign import record_intercept
+
+    record_intercept(lab, stop=True, ask="导出或停止。", raw="")
+    refused = ask_user(lab, "A) 写论文 或 B) 指定继续深化某一问")
+    assert refused["allowed"] is False
+    assert "deepen" in str(refused.get("error") or "").lower()
+    ok = ask_user(lab, "导出中文说明稿，或停止。不要再做题内实验。")
+    assert ok["allowed"] is True
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -425,4 +611,10 @@ if __name__ == "__main__":
         print("ok hat")
         test_agree_stop_blocked_by_unused_paper(base / "u")
         print("ok unused stop")
+        test_call_divergence_requires_summary(base / "s")
+        print("ok summary")
+        test_charter_reject_does_not_agree_stop(base / "k")
+        print("ok charter stop")
+        test_ask_user_refuses_deepen_menu(base / "q")
+        print("ok deepen menu")
     print("all passed")

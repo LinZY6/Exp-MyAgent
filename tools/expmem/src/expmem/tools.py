@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 from expmem.service import ExperimentLab
+
+_LAB_SRC = Path(__file__).resolve().parents[3] / "lab" / "src"
+if _LAB_SRC.is_dir() and str(_LAB_SRC) not in sys.path:
+    sys.path.insert(0, str(_LAB_SRC))
 
 TOOL_SCHEMA = [
     {
@@ -58,6 +63,9 @@ TOOL_SCHEMA = [
             "delta": "float",
             "error": "string",
             "failed": "bool. no metrics: drop the node from the DAG",
+            "requirement_id": "optional. designer requirement; contrast gate uses this",
+            "hard_checks": "optional object. required-true keys from the requirement must be true",
+            "lab": "optional. campaign lab (or EXPERIMENT_LAB) for contrast / protocol.json",
         },
     },
 ]
@@ -147,8 +155,57 @@ def handle(root: str, action: str, params: dict[str, Any], *, project: str = "de
         metrics = params.get("metrics") or {}
         if isinstance(metrics, str) and metrics.strip():
             metrics = json.loads(metrics)
+        if not isinstance(metrics, dict):
+            metrics = {}
+        hard_checks = params.get("hard_checks")
+        if isinstance(hard_checks, str) and hard_checks.strip():
+            try:
+                hard_checks = json.loads(hard_checks)
+            except json.JSONDecodeError:
+                hard_checks = {}
+        nested = metrics.get("hard_checks") if isinstance(metrics.get("hard_checks"), dict) else None
+        metrics = {k: v for k, v in metrics.items() if k != "hard_checks"}
+        if hard_checks in (None, "") and nested:
+            hard_checks = nested
+        lab_path = Path(str(params.get("lab") or os.environ.get("EXPERIMENT_LAB") or "").strip())
+        eid = str(params.get("experiment_id") or params.get("id") or "")
+        if lab_path.is_dir() and not bool(params.get("failed")) and metrics:
+            try:
+                from lab.contrast import (
+                    gate_complete,
+                    load_protocol,
+                    pick_metric,
+                    resolve_requirement,
+                    write_contrast_verdict,
+                )
+            except ImportError:
+                gate_complete = None  # type: ignore[assignment]
+            else:
+                req = resolve_requirement(
+                    lab_path,
+                    requirement_id=str(params.get("requirement_id") or ""),
+                    experiment_id=eid,
+                )
+                prefer, higher = load_protocol(lab_path)
+                node = lab.store.get(eid)
+                parent_val = None
+                if node and node.upstream_ids:
+                    parent = lab.store.get(node.upstream_ids[0])
+                    parent_metrics = parent.actual.metrics if parent and parent.actual else None
+                    parent_val = pick_metric(parent_metrics, prefer)
+                blocked = gate_complete(
+                    requirement=req,
+                    metrics=metrics,
+                    hard_checks=hard_checks,
+                    parent_value=parent_val,
+                    higher_better=higher,
+                    primary=prefer,
+                )
+                if blocked:
+                    write_contrast_verdict(lab_path, blocked)
+                    return blocked
         return lab.complete(
-            str(params.get("experiment_id") or params.get("id") or ""),
+            eid,
             metrics=metrics if isinstance(metrics, dict) else None,
             verdict=params.get("verdict"),
             delta=float(params["delta"]) if params.get("delta") is not None else None,

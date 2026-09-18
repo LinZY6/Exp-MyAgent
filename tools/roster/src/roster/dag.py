@@ -68,7 +68,7 @@ def _protocol(lab: Path, primary: str) -> tuple[str, bool]:
                     higher = bool(item.get("higher_better"))
                 break
     if higher is None:
-        higher = not any(k in prefer.lower() for k in ("mse", "mae", "error", "loss", "nll", "ece"))
+        higher = not any(k in prefer.lower() for k in ("mse", "mae", "error", "loss", "nll", "ece", "cost", "penalty"))
     return prefer, bool(higher)
 
 
@@ -158,6 +158,16 @@ def summarize(lab: Path, *, limit: int = 20, primary: str = "") -> dict[str, Any
         f"higher_better={str(higher).lower()}",
         f"consecutive_non_improve={streak} kinds={','.join(sorted(kinds)) or '(none)'} count={len(nodes)}",
     ]
+    try:
+        from lab.contrast import latest_contrast
+    except ImportError:
+        latest_contrast = lambda _lab: None  # noqa: E731
+    contrast = latest_contrast(lab)
+    if contrast:
+        header.append(
+            "latest_contrast_refuse="
+            + str(contrast.get("contrast_violation") or contrast.get("error") or "refuse")
+        )
     body = "\n".join(header + shown) if nodes else "(empty DAG)"
     return {
         "ok": True,

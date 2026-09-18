@@ -10,7 +10,10 @@
 <lab>/reviews/mailbox/<id>.json          反问 / 退回
 <lab>/reviews/verdicts/<role>-<slug>.json
 <lab>/reviews/hat.json                   当前帽子（call_* 戴上，agent_done 摘成 main）
-<lab>/reviews/asked_user.json            本次 exhausted 上 ask_user 已成功
+<lab>/reviews/asked_user.json            拦截者同意停之后，真人 ask_user 已成功
+<lab>/reviews/loop_summary.json          主 loop 交给拦截者子进程的汇总
+<lab>/reviews/intercept.json             拦截者子进程的 stop / as_user
+<lab>/reviews/as_user.json               拦截者充当用户、尚未被设计者消费的 steer
 <lab>/reviews/done/<done-*.json>         摘帽子记录（不进 latest_divergence）
 <lab>/memory/designer.json               设计者记忆（论文、设计过的实验）
 ```
@@ -24,7 +27,7 @@
 | experiment-designer | CHARTER 冻结栏；`DIRECTIONS.md`；DAG 摘要；已下载论文清单；**设计者记忆**；未读的实验者/拦截者问题 | `fit.py` 全文；实验者「下一刀我想…」；通读 `paper.txt`；改 DAG |
 | experimenter | **当前** `post_requirement`；审查退回（reasons + 原需求 + `code_sha256` + 报错）；CHARTER 冻结栏 | 设计者思维链；整份 jsonl；自己编新方法 |
 | reviewer | 本刀 queue task + 对应 requirement；CHARTER / protocol；当前代码哈希；unified diff（若刚改过） | 实验者收工叙事；自己改 src |
-| divergence-interceptor | CHARTER；DIRECTIONS；DAG（已跑节点）；已下载论文清单；challenge_round | 设计者记忆；`reviews/requirements`；设计者 packet；实验者收工叙事；`fit.py` |
+| divergence-interceptor | DIRECTIONS（用户的话）；主 loop 汇总；DAG（已跑节点）；已下载论文清单；challenge_round | 设计者记忆；`reviews/requirements`；设计者 packet；实验者收工叙事；`fit.py` |
 
 ## 摘要怎么做
 
@@ -36,4 +39,4 @@ consecutive_non_improve=<n> kinds=... count=<n>
 id=<id> kind=<kind> change=<短句> primary=<值或空> verdict=<planned|done|...> delta_vs_parent=<可选>
 ```
 
-最多 20 条节点行。拦截者**不要**根据设计者记忆来提方案；只用需求 + 背景 + 已跑 DAG。设计者被反问后必须补论文、补需求。
+最多 20 条节点行。若有 `reviews/verdicts/contrast-*.json`，摘要多一行 `latest_contrast_refuse=...`（对照未过、未入账，不是发现）。拦截者**不要**根据设计者记忆来提方案；只用用户需求 + 主 loop 汇总 + 已跑 DAG。设计者被反问后必须补论文、补需求。对照失败由设计者解释并决定修实现或另开同输入父节点。

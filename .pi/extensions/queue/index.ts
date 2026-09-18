@@ -148,7 +148,7 @@ const queueTake = defineTool({
 	label: "Take next queue task",
 	description:
 		"Return the highest-priority queued task and mark it running. Does not run the fit. " +
-		"empty=true is not a campaign-stop: main loop call_divergence or call_designer. " +
+		"empty=true is not a campaign-stop: main loop ask_user (interceptor subprocess) or call_designer. " +
 		"The Reviewer is the one who takes. If something is already running, returns that instead. peek=true lists without claiming.",
 	parameters: Type.Object({
 		peek: Type.Optional(Type.Boolean()),

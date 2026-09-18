@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,10 @@ from lab.hat import read_asked_user, read_hat, utc_now, write_asked_user
 QUEUE_NAME = "task_queue.json"
 DIV_ROLES = {"divergence-reviewer", "divergence-interceptor"}
 DIV_VERDICTS = {"exhausted", "enqueue"}
+_YIELD_DEEPEN = re.compile(
+    r"深化|继续做实验|指定继续|要不要再(跑|做|试)|continue deepening|keep iterating",
+    re.I,
+)
 
 
 def load_queue(lab: Path) -> list[dict[str, Any]]:
@@ -80,6 +85,106 @@ def latest_designer_stop(lab: Path) -> dict[str, Any] | None:
         out["_path"] = str(path)
         return out
     return None
+
+
+def _reviews_json(lab: Path, *parts: str) -> Path:
+    return lab.resolve().joinpath("reviews", *parts)
+
+
+def latest_intercept(lab: Path) -> dict[str, Any] | None:
+    path = _reviews_json(lab, "intercept.json")
+    if not path.is_file():
+        return None
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except (OSError, json.JSONDecodeError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def pending_as_user(lab: Path) -> dict[str, Any] | None:
+    path = _reviews_json(lab, "as_user.json")
+    if not path.is_file():
+        return None
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(obj, dict) or not obj.get("unread", True):
+        return None
+    if not str(obj.get("text") or "").strip():
+        return None
+    return obj
+
+
+def consume_as_user(lab: Path) -> dict[str, Any] | None:
+    path = _reviews_json(lab, "as_user.json")
+    obj = pending_as_user(lab)
+    if not obj:
+        return None
+    obj["unread"] = False
+    obj["consumed_at"] = utc_now()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return obj
+
+
+def write_loop_summary(lab: Path, text: str) -> dict[str, Any]:
+    path = _reviews_json(lab, "loop_summary.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = {"role": "main", "text": text, "at": utc_now()}
+    path.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return body
+
+
+_LOOP_INJECT = "[campaign-loop]"
+
+
+def record_intercept(
+    lab: Path,
+    *,
+    stop: bool,
+    as_user: str = "",
+    ask: str = "",
+    raw: str = "",
+    summary: str = "",
+) -> dict[str, Any]:
+    lab = lab.resolve()
+    blob = f"{as_user}\n{ask}\n{raw}"
+    if _LOOP_INJECT in blob or "[interceptor-as-user]" in blob:
+        return {
+            "ok": False,
+            "error": "refusing to record a campaign-loop injection as interceptor output",
+        }
+    if summary.strip():
+        write_loop_summary(lab, summary)
+    body = {
+        "stop": bool(stop),
+        "as_user": (as_user or "")[:4000],
+        "ask": (ask or "")[:1000],
+        "raw": (raw or "")[:8000],
+        "at": utc_now(),
+    }
+    path = _reviews_json(lab, "intercept.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    steer_path = _reviews_json(lab, "as_user.json")
+    if not stop:
+        steer = {
+            "unread": True,
+            "text": (as_user or raw or "").strip()[:4000],
+            "at": utc_now(),
+        }
+        steer_path.write_text(json.dumps(steer, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    elif steer_path.is_file():
+        try:
+            old = json.loads(steer_path.read_text(encoding="utf-8") or "{}")
+        except (OSError, json.JSONDecodeError):
+            old = {}
+        if isinstance(old, dict):
+            old["unread"] = False
+            steer_path.write_text(json.dumps(old, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"ok": True, **body}
 
 
 def unread_mail(lab: Path, to_role: str) -> list[dict[str, Any]]:
@@ -165,6 +270,7 @@ def check_stop(lab: Path) -> dict[str, Any]:
             if next_task
             else None
         ),
+        "hat": read_hat(lab) or "main",
     }
 
     def refuse(must: str, error: str, hint: str) -> dict[str, Any]:
@@ -196,31 +302,12 @@ def check_stop(lab: Path) -> dict[str, Any]:
             "designer has an unread question (clarify or stop_check)",
             "call_designer and designer_reply / post_requirement. Do not ask the user.",
         )
-    if agree_stop and div_verdict == "exhausted":
-        asked = read_asked_user(lab) or {}
-        may_yield = str(asked.get("divergence_path") or "") == str((div or {}).get("_path") or "")
-        if may_yield:
-            return {
-                **base,
-                "ok": True,
-                "may_stop": True,
-                "may_yield": True,
-                "must": None,
-                "hint": "ask_user already succeeded for this exhausted verdict; the turn may go to the user",
-            }
-        return {
-            **base,
-            "ok": True,
-            "may_stop": True,
-            "may_yield": False,
-            "must": "ask_user",
-            "hint": "queue empty, designer agree_stop, divergence exhausted; call ask_user. Do not write a wrap-up report.",
-        }
-    if agree_stop and div_verdict != "exhausted":
+    steer = pending_as_user(lab)
+    if steer:
         return refuse(
-            "call_divergence",
-            "designer agreed to stop; divergence must record_exhausted before ask_user",
-            "call_divergence, record_exhausted, then ask_user if campaign_gate.may_stop.",
+            "call_designer",
+            "interceptor acted as the user; take that steer to the designer",
+            "call_designer. The interceptor subprocess returned as_user; do not ask the human.",
         )
     if not has_history(lab):
         return refuse(
@@ -228,15 +315,40 @@ def check_stop(lab: Path) -> dict[str, Any]:
             "fresh lab: designer must post the first requirements",
             "call_designer intent=propose (discuss two seats, post_requirement). Not a campaign-stop.",
         )
-    return refuse(
-        "call_divergence",
-        "empty queue is not a stop until divergence asks the designer and the designer agrees",
-        "call_divergence: independently propose diverse schemes (DIRECTIONS+CHARTER+DAG, not designer memory), ask why they were not tried. Stop only after repeated challenges.",
-    )
+    intercept = latest_intercept(lab) or {}
+    interceptor_stop = bool(intercept.get("stop"))
+    asked = read_asked_user(lab) or {}
+    extra = {**base, "interceptor_stop": interceptor_stop}
+    if interceptor_stop and asked.get("text"):
+        return {
+            **extra,
+            "ok": True,
+            "may_stop": True,
+            "may_yield": True,
+            "must": None,
+            "hint": "interceptor and designer agreed to stop; ask_user already opened the human turn",
+        }
+    if interceptor_stop:
+        return {
+            **extra,
+            "ok": True,
+            "may_stop": True,
+            "may_yield": False,
+            "must": "ask_user",
+            "hint": "interceptor subprocess agreed to stop; ask_user now yields to the human (halt / export / DIRECTIONS).",
+        }
+    return {
+        **extra,
+        "ok": True,
+        "may_stop": True,
+        "may_yield": False,
+        "must": "ask_user",
+        "hint": "empty queue: ask_user goes to the interceptor subprocess (which consults designer). Not the human.",
+    }
 
 
 def ask_user(lab: Path | None, text: str = "") -> dict[str, Any]:
-    """Only legal user-facing channel once a lab is bound. Refuses until campaign-stop."""
+    """Bound labs: first hit is the interceptor subprocess; human yield only after it stops."""
     if lab is None:
         return {
             "ok": True,
@@ -261,22 +373,42 @@ def ask_user(lab: Path | None, text: str = "") -> dict[str, Any]:
             "hint": gate.get("hint"),
             "draft_ignored": (text or "")[:200],
         }
-    hat = read_hat(lab)
-    if hat and hat not in {"divergence-interceptor", "main"}:
+    intercept = latest_intercept(lab) or {}
+    if not intercept.get("stop"):
+        if text.strip():
+            write_loop_summary(lab, text)
+        return {
+            "ok": True,
+            "allowed": False,
+            "intercept": True,
+            "may_stop": True,
+            "may_yield": False,
+            "must": "ask_user",
+            "interceptor_stop": False,
+            "hint": (
+                "ask_user is routed to the interceptor subprocess, which must task(agent=designer). "
+                "If they continue, the interceptor acts as the user back to the main loop."
+            ),
+            "draft": (text or "")[:2000],
+        }
+    if _YIELD_DEEPEN.search(text or ""):
         return {
             "ok": False,
             "allowed": False,
             "may_stop": True,
             "may_yield": False,
-            "hat": hat,
-            "error": "only the divergence interceptor (or main after agent_done) may ask_user",
-            "must": "call_divergence",
-            "hint": "Drop the current hat with agent_done, then call_divergence / ask_user.",
+            "error": (
+                "ask_user may not ask whether to deepen in-scope experiments. "
+                "That question belongs to the interceptor vs the Designer. "
+                "Ask halt / export / changing DIRECTIONS only."
+            ),
+            "must": "ask_user",
+            "hint": "Rephrase without 深化 / continue-experiment.",
             "draft_ignored": (text or "")[:200],
         }
     write_asked_user(
         lab,
-        divergence_path=str(gate.get("divergence_path") or ""),
+        divergence_path=str((latest_intercept(lab) or {}).get("at") or ""),
         text=text,
         at=utc_now(),
     )

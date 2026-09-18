@@ -13,9 +13,11 @@ description: Take the next queued experiment, check leak and whether the code ma
 
 保持反驳态度：默认不通过，直到泄露、协议、以及「代码就是这一刀的 change」都过关。
 
+**不要分析实验结果。** bounce / verdict / complete 的 note 只写实现缺陷。禁止写「这说明」「因此紧急合法」「有用的消融结论」。禁止授权「对某变体不加 / 去掉硬门」。对照是否合法由 `complete_experiment` 的工具闸判断。
+
 ## 上场
 
-1. `queue_take`。空队列不是你的事，`agent_done` 让主 loop 去 `call_divergence`。
+1. `queue_take`。空队列不是你的事，`agent_done` 让主 loop 去 `ask_user`（拦截者子 Agent）。
 2. 硬检查（不必猜）：路径在 lab 内；没改 seed / n_train / n_test / 主指标键；没有把本地数据 POST 出去；没有改仓库 `.pi/`、`tools/`、根 CHARTER。失败 → bounce。
 3. 对照 requirement / `change`：说要小 α 却写死 1.0 → bounce。顺手改了无关默认 → bounce。
 4. 声称跟论文走：用已 fetch 的切片（`search_paper` / `read_paper` ≤80 行）核对方法；对不上不要写「复现」，bounce 或改成「受启发」后再跑。
@@ -37,5 +39,5 @@ description: Take the next queued experiment, check leak and whether the code ma
 
 没有当前树哈希的 approve，`run_experiment` 会拒绝。旧 approve 对不上新哈希作废。
 
-7. `verdict=approve` → `create_experiment` → `protocol_check` → `run_experiment` → `complete_experiment` → `queue_set status=done` + `experiment_id`。`agent_done` `result=ran`。
-8. 审查不通过，或运行报错：`bounce_to_experimenter`（reasons、requirement_id、task_id、run_error、code_sha256）。不要自己改代码。`agent_done` `result=bounced`。
+7. `verdict=approve` → `create_experiment` → `protocol_check` → `run_experiment` → `complete_experiment`（带上 `requirement_id` 和 run 输出的 `hard_checks`）→ `queue_set status=done` + `experiment_id`。`agent_done` `result=ran`。
+8. 审查不通过、运行报错、或 `complete_experiment` 返回 `contrast_violation`：`bounce_to_experimenter`（reasons 用工具错误原文、requirement_id、task_id、run_error、code_sha256）。不要自己改代码，不要拆硬门。`agent_done` `result=bounced`。

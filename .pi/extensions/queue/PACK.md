@@ -4,7 +4,7 @@ Pi 四个 tool。数据在 **lab** 目录的 `task_queue.json`。不写 `experim
 
 | 工具 | 作用 |
 |------|------|
-| `queue_put` | 入队可跑实验。必须 `proposed_by=experimenter` 且带设计者的 `requirement_id` |
+| `queue_put` | 入队可跑实验。必须 `proposed_by=experimenter` 且带设计者的 `requirement_id`；不得改少需求上的 `hard_checks` |
 | `queue_list` | 按优先级列出 |
 | `queue_set` | 改 status、挂上 experiment_id；改 title/spec/priority 需 experimenter |
 | `queue_take` | 审查者取出最高优先级 `queued` 并标 `running`（不跑实验） |

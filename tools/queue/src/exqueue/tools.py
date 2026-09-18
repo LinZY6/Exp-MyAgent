@@ -15,6 +15,18 @@ except ImportError:  # pragma: no cover
     def require_hat(lab: Path, allowed, action: str):  # type: ignore[misc]
         return None
 
+try:
+    from lab.contrast import as_checks, as_list, checks_weakened
+except ImportError:  # pragma: no cover
+    def as_checks(raw):  # type: ignore[misc]
+        return raw if isinstance(raw, dict) else {}
+
+    def as_list(raw):  # type: ignore[misc]
+        return [] if raw in (None, "") else [str(raw)]
+
+    def checks_weakened(_required, _proposed):  # type: ignore[misc]
+        return False
+
 PUTTERS = ("experimenter",)
 SCHEME_KEYS = ("priority", "title", "reason")
 
@@ -50,7 +62,10 @@ def _as_int(raw: Any, default: int) -> int:
 
 def _spec(params: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for key in ("model", "features", "degree", "alpha", "kind", "upstream", "change", "rationale", "expected"):
+    for key in (
+        "model", "features", "degree", "alpha", "kind", "upstream", "change",
+        "rationale", "expected", "held_fixed", "expect_vs_parent", "hard_checks",
+    ):
         if params.get(key) not in (None, ""):
             out[key] = params[key]
     extra = params.get("spec")
@@ -78,6 +93,23 @@ def _load_requirement(lab: Path, rid: str) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def _apply_contract(spec: dict[str, Any], req: dict[str, Any]) -> dict[str, Any] | None:
+    """Copy frozen contrast fields from the requirement. Refuse weakened hard_checks."""
+    incoming = spec.get("hard_checks") if "hard_checks" in spec else None
+    if checks_weakened(req.get("hard_checks"), incoming):
+        return {
+            "ok": False,
+            "error": "queue spec cannot drop requirement hard_checks",
+            "contrast_violation": "hard_checks",
+            "hint": "hard_checks are frozen on the requirement_id. ask_designer for a new brief.",
+        }
+    spec["held_fixed"] = as_list(req.get("held_fixed"))
+    if req.get("expect_vs_parent") not in (None, ""):
+        spec["expect_vs_parent"] = req.get("expect_vs_parent")
+    spec["hard_checks"] = as_checks(req.get("hard_checks"))
+    return None
 
 
 def _mark_requirement_queued(lab: Path, rid: str, task_id: str) -> None:
@@ -151,6 +183,9 @@ def put(params: dict[str, Any]) -> dict[str, Any]:
     if req.get("reason"):
         spec["rationale"] = req["reason"]
     spec.update(_spec(params))
+    frozen = _apply_contract(spec, req)
+    if frozen:
+        return frozen
     who = _proposed_by(params)
     if existing:
         existing["title"] = title
@@ -229,6 +264,12 @@ def set_task(params: dict[str, Any]) -> dict[str, Any]:
     if spec:
         merged = dict(task.get("spec") or {})
         merged.update(spec)
+        rid = str(task.get("requirement_id") or "").strip()
+        req = _load_requirement(lab, rid) if rid else None
+        if req:
+            frozen = _apply_contract(merged, req)
+            if frozen:
+                return frozen
         task["spec"] = merged
     task["updated_at"] = utc_now()
     save(lab, tasks)
@@ -273,7 +314,7 @@ def take(params: dict[str, Any]) -> dict[str, Any]:
             "lab": str(lab),
             "hint": (
                 "no queued or blocked items; this is not a campaign-stop. "
-                "Main loop: call_divergence (if the DAG has history) or call_designer (fresh lab). "
+                "Main loop: ask_user (interceptor subprocess, if the DAG has history) or call_designer (fresh lab). "
                 "Do not ask the user."
             ),
         }

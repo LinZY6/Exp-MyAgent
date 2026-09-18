@@ -11,6 +11,7 @@ from roster.store import (
     load_memory,
     open_requirements,
     packet_folder,
+    read_json,
     slice_text,
     unread_mail,
     utc_now,
@@ -69,6 +70,7 @@ ALLOWED = {
         "run_experiment",
         "run_microgrid",
         "run_spfit",
+        "run_tfconf",
         "complete_experiment",
         "bounce_to_experimenter",
         "agent_done",
@@ -122,27 +124,65 @@ FORBIDDEN = {
 }
 
 
+def _loop_summary_text(lab: Path, extra: dict[str, Any]) -> str:
+    text = str(extra.get("loop_summary") or "").strip()
+    if text:
+        return text
+    obj = read_json(lab / "reviews" / "loop_summary.json")
+    return str((obj or {}).get("text") or "").strip()
+
+
 def _body(lab: Path, role: str, intent: str, extra: dict[str, Any]) -> str:
     dag = summarize(lab)
     papers = listed_papers(lab)
     reqs = open_requirements(lab)
-    parts = [
+    charter = slice_text(lab / "CHARTER.md", 80 if role == "divergence-interceptor" else 60) or "(missing CHARTER.md)"
+    directions = (
+        slice_text(lab / "DIRECTIONS.md", 120 if role == "divergence-interceptor" else 80)
+        or "(empty DIRECTIONS.md)"
+    )
+    dag_text = dag.get("text") or "(empty DAG)"
+    paper_lines = "\n".join(f"- {p.get('paper_id')} {p.get('title')}" for p in papers) or "(none)"
+    header = [
         f"# packet {role} intent={intent}",
         f"lab: {lab}",
         f"written: {utc_now()}",
         "",
-        "## CHARTER (project background)",
-        slice_text(lab / "CHARTER.md", 80 if role == "divergence-interceptor" else 60) or "(missing CHARTER.md)",
-        "",
-        "## DIRECTIONS (user requirements)",
-        slice_text(lab / "DIRECTIONS.md", 120 if role == "divergence-interceptor" else 80) or "(empty DIRECTIONS.md)",
-        "",
-        "## DAG digest (what already ran, not the Designer's wishlist)",
-        dag.get("text") or "(empty DAG)",
-        "",
-        "## downloaded papers",
-        "\n".join(f"- {p.get('paper_id')} {p.get('title')}" for p in papers) or "(none)",
     ]
+    if role == "divergence-interceptor":
+        summary = _loop_summary_text(lab, extra) or (
+            "(missing — main loop must call_divergence with summary= what it would tell the user)"
+        )
+        parts = header + [
+            "## 用户需求 DIRECTIONS（用户的话）",
+            directions,
+            "",
+            "## 主 loop 汇总（它本想交给用户的内容。拿来反驳，不要当成已经做完）",
+            summary,
+            "",
+            "## DAG digest（已经跑过的节点，不是设计者愿望清单）",
+            dag_text,
+            "",
+            "## lab 冻结 CHARTER（Agent 写的任务说明书，不是用户原文）",
+            charter,
+            "",
+            "## downloaded papers",
+            paper_lines,
+        ]
+    else:
+        parts = header + [
+            "## CHARTER (project background)",
+            charter,
+            "",
+            "## DIRECTIONS (user requirements)",
+            directions,
+            "",
+            "## DAG digest (what already ran, not the Designer's wishlist)",
+            dag_text,
+            "",
+            "## downloaded papers",
+            paper_lines,
+        ]
     if role == "experiment-designer":
         mem = load_memory(lab)
         parts += [
@@ -167,6 +207,18 @@ def _body(lab: Path, role: str, intent: str, extra: dict[str, Any]) -> str:
             "## open requirements already posted",
             "\n".join(f"- {r.get('id')} {r.get('change')}" for r in reqs) or "(none)",
         ]
+        try:
+            from lab.contrast import latest_contrast
+        except ImportError:
+            latest_contrast = lambda _lab: None  # noqa: E731
+        contrast = latest_contrast(lab)
+        parts += ["", "## latest contrast refuse (tool, not a finding)"]
+        if contrast:
+            parts.append(
+                f"- {contrast.get('contrast_violation') or 'refuse'}: {contrast.get('error') or ''}"
+            )
+        else:
+            parts.append("(none)")
     if role == "experimenter":
         bounce = unread_mail(lab, "experimenter")
         parts += ["", "## requirements to implement"]
@@ -175,6 +227,8 @@ def _body(lab: Path, role: str, intent: str, extra: dict[str, Any]) -> str:
         for r in reqs:
             parts.append(
                 f"- id={r.get('id')} kind={r.get('kind')} change={r.get('change')} "
+                f"upstream={r.get('upstream')} held_fixed={r.get('held_fixed')} "
+                f"expect_vs_parent={r.get('expect_vs_parent')} hard_checks={r.get('hard_checks')} "
                 f"reason={r.get('reason')} papers={r.get('papers')}"
             )
         parts += ["", "## reviewer bounce (no memory — this is the whole story)"]
@@ -191,20 +245,25 @@ def _body(lab: Path, role: str, intent: str, extra: dict[str, Any]) -> str:
             "## how to proceed",
             "queue_take the next queued job. Check leak + change vs requirement. "
             "approve with current lab_code_hash then create/run/complete. "
+            "Pass run hard_checks into complete_experiment (requirement_id + hard_checks). "
+            "Do not interpret metrics as science and do not bounce 'drop this hard_check'. "
+            "On contrast_violation, bounce the tool error verbatim. "
             "On fail, bounce_to_experimenter with original requirement + reasons + current hash.",
         ]
     if role == "divergence-interceptor":
         parts += [
             "",
             "## how to proceed",
-            f"Challenge round {extra.get('challenge_round') or '?'} of {extra.get('min_rounds') or 3}. "
+            f"Challenge round {extra.get('challenge_round') or '?'} of {extra.get('min_rounds') or 2}. "
             "You are independent of the Designer. Do NOT read memory/designer.json, reviews/requirements, "
-            "or experiment-designer-*.md — those are the Designer's prior plan and will contaminate you. "
-            "From DIRECTIONS + CHARTER + DAG (what already ran) only, write TWO OR MORE diverse schemes "
-            "(different kind, different change). Then ask_designer: why were these not tried? "
-            "Demand more papers and more schemes. Do not echo the Designer's earlier rationale. "
+            "or experiment-designer-*.md. Attack the main-loop summary using DIRECTIONS + that summary + DAG. "
+            "Write TWO OR MORE in-scope schemes (different kind, different change) that check: "
+            "(1) more properties of already-run experiments; (2) more papers; "
+            "(3) stability / sensitivity; (4) remaining depth the summary skipped. "
+            "ask_designer: why were these not tried? Do not echo the summary as truth. "
+            "CHARTER-only proposals that the Designer can rubber-stamp do not count. "
             "Do not ask_user until challenge_round >= min AND the Designer still insist on stop "
-            "after rejecting every proposal with CHARTER/DIRECTIONS/DAG/USER/DUPLICATE. "
+            "after covering every proposal with DAG/DUPLICATE/DIRECTIONS/USER (not CHARTER). "
             "Do not queue_put. Solver Optimal is not a reason to skip proposing.",
         ]
     if extra.get("note"):

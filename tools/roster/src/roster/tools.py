@@ -57,11 +57,21 @@ _SKIP_OK = re.compile(
     r"^(CHARTER|DIRECTIONS|DAG|USER|DUPLICATE|用户禁止|章程排除)",
     re.I,
 )
-MIN_CHALLENGE_ROUNDS = 3
+# CHARTER is an agent-written freeze, not the user's words — it does not prove
+# in-scope axes are done. DIRECTIONS/USER are the user's constraints.
+_COVER_OK = re.compile(
+    r"^(DAG|DUPLICATE|DIRECTIONS|USER|用户禁止)\b",
+    re.I,
+)
+_OFF_TASK = re.compile(r"^(CHARTER|章程排除)\b", re.I)
+MIN_CHALLENGE_ROUNDS = 2
+SUMMARY_MIN = 40
 DEFAULT_CHALLENGE = (
-    "Why were these schemes not tried? You posted too few experiments. "
-    "deep_research more papers (new query), then post_requirement for at least one "
-    "orthogonal idea. Do not agree_stop until you have been challenged repeatedly."
+    "The main-loop summary is not a stop. Challenge it: more properties of the "
+    "already-run experiments were not checked; more papers were not read; "
+    "stability was not shown; remaining in-scope depth was skipped. "
+    "deep_research a new query, then post_requirement. CHARTER-only rejections "
+    "do not count toward agree_stop."
 )
 
 
@@ -155,11 +165,28 @@ def call_designer(params: dict[str, Any]) -> dict[str, Any]:
         ) + (
             f"Interceptor challenge_round={n}/{MIN_CHALLENGE_ROUNDS}. "
             "This is a challenge, not a stop request. If round < min, agree_stop is refused: "
-            "deep_research a NEW query and post_requirement. Do not echo the interceptor's wording as your only plan."
+            "deep_research a NEW query and post_requirement. "
+            "CHARTER-prefixed rejected_proposals do not cover a proposal. "
+            "Do not echo the interceptor's wording as your only plan."
         )
+    steer = None
+    try:
+        from lab.campaign import consume_as_user, pending_as_user
+
+        pending = pending_as_user(lab)
+        if pending:
+            extra["as_user"] = str(pending.get("text") or "")
+            extra["note"] = (
+                (extra.get("note") or "") + "\nInterceptor-as-user steer:\n" + extra["as_user"]
+            ).strip()
+            steer = consume_as_user(lab)
+    except ImportError:
+        pending = None
     out = write_packet(lab, "experiment-designer", intent, extra)
     out["memory"] = load_memory(lab)
     out["papers_on_disk"] = listed_papers(lab)
+    if steer:
+        out["as_user"] = steer
     return out
 
 
@@ -204,8 +231,8 @@ def call_reviewer(params: dict[str, Any]) -> dict[str, Any]:
         return {
             "ok": False,
             "error": "no queued or running task; reviewer has nothing to take",
-            "must": "call_divergence",
-            "hint": "empty queue is a stop-intercept: call_divergence, not a fake review",
+            "must": "ask_user",
+            "hint": "empty queue is a stop-intercept: ask_user spawns the interceptor subprocess",
         }
     return write_packet(
         lab,
@@ -274,11 +301,31 @@ def _challenge_round(lab: Path) -> int:
 
 def call_divergence(params: dict[str, Any]) -> dict[str, Any]:
     lab = _lab(params)
+    summary = str(params.get("summary") or "").strip()
+    if len(summary) < SUMMARY_MIN:
+        return {
+            "ok": False,
+            "error": (
+                "call_divergence requires summary= the main loop's wrap-up of "
+                "design/implement/review so far (what it would tell the user)"
+            ),
+            "must": "call_divergence",
+            "hint": (
+                "Do not ask_user. Write what you would report to the user, then "
+                f"call_divergence(summary=...) with at least {SUMMARY_MIN} characters. "
+                "The interceptor attacks that text; it does not read designer memory."
+            ),
+        }
+    write_json(
+        lab / "reviews" / "loop_summary.json",
+        {"role": "main", "text": summary, "at": utc_now()},
+    )
     dag = summarize(lab)
     round_n = _challenge_round(lab) + 1
     extra = {
         "slug": "stop",
         "note": str(params.get("note") or ""),
+        "loop_summary": summary,
         "challenge_round": round_n,
         "min_rounds": MIN_CHALLENGE_ROUNDS,
     }
@@ -357,6 +404,21 @@ def bounce_to_experimenter(params: dict[str, Any]) -> dict[str, Any]:
         reasons = [p.strip() for p in reasons.replace("|", ";").split(";") if p.strip()]
     if not isinstance(reasons, list) or not reasons:
         return {"ok": False, "error": "reasons required (list or string)"}
+    try:
+        from lab.contrast import drop_hard_check_forbidden
+    except ImportError:  # pragma: no cover
+        drop_hard_check_forbidden = lambda _reasons: False  # noqa: E731
+    if drop_hard_check_forbidden(reasons):
+        return {
+            "ok": False,
+            "error": "bounce may not authorize dropping requirement hard_checks",
+            "contrast_violation": "drop_hard_checks",
+            "must": "bounce_to_experimenter",
+            "hint": (
+                "Write an implementation defect only. To change hard_checks the Designer "
+                "must post a new requirement_id. Experimenter: ask_designer, do not edit src."
+            ),
+        }
     mid = new_id("m")
     task_id = str(params.get("task_id") or "").strip()
     mail = {
@@ -408,12 +470,31 @@ def post_requirement(params: dict[str, Any]) -> dict[str, Any]:
     change = str(params.get("change") or params.get("title") or "").strip()
     if not change:
         return {"ok": False, "error": "change or title required"}
+    kind = str(params.get("kind") or "other").strip() or "other"
+    try:
+        from lab.contrast import as_checks, as_list, contract_error, normalize_expect
+    except ImportError:  # pragma: no cover
+        as_checks = lambda raw: raw if isinstance(raw, dict) else {}  # noqa: E731
+        as_list = lambda raw: [] if raw in (None, "") else [str(raw)]  # noqa: E731
+        contract_error = lambda *_a, **_k: None  # noqa: E731
+        normalize_expect = lambda _kind, raw: str(raw or "any")  # noqa: E731
+    blocked_contract = contract_error(
+        kind,
+        upstream=params.get("upstream"),
+        held_fixed=params.get("held_fixed"),
+        expect_vs_parent=params.get("expect_vs_parent"),
+    )
+    if blocked_contract:
+        return blocked_contract
     rid = str(params.get("id") or "").strip() or new_id("r")
     req = {
         "id": rid,
-        "kind": str(params.get("kind") or "other"),
+        "kind": kind,
         "change": change,
         "upstream": str(params.get("upstream") or ""),
+        "held_fixed": as_list(params.get("held_fixed")),
+        "expect_vs_parent": normalize_expect(kind, params.get("expect_vs_parent")),
+        "hard_checks": as_checks(params.get("hard_checks")),
         "knobs": params.get("knobs") if isinstance(params.get("knobs"), dict) else {},
         "model": params.get("model"),
         "features": params.get("features"),
@@ -513,16 +594,28 @@ def designer_reply(params: dict[str, Any]) -> dict[str, Any]:
             mail_preview = _load_mail(lab, mail_id) if mail_id else None
             proposals = list((mail_preview or {}).get("proposals") or [])
             rejected = _parse_ideas(params.get("rejected_proposals"))
-            missing = _uncovered(proposals, rejected) if proposals else []
+            missing = _uncovered(proposals, rejected, lab) if proposals else []
             if missing:
+                off_task = [
+                    p
+                    for p in missing
+                    if _OFF_TASK.match(str(p.get("reject_why") or "").strip())
+                ]
                 return {
                     "ok": False,
-                    "error": "cannot agree_stop: interceptor proposals are not all rejected with a CHARTER/DIRECTIONS/DAG/USER/DUPLICATE why",
+                    "error": (
+                        "cannot agree_stop: interceptor proposals are not all covered. "
+                        "DAG/DUPLICATE only counts if a done node has the same change text. "
+                        "Guessing '1-D is flat / below noise' is not a DAG hit. "
+                        "CHARTER rejection does not count."
+                    ),
                     "unanswered_proposals": missing,
+                    "off_task_rejections": off_task,
                     "must": "post_requirement",
                     "hint": (
-                        "Accept a proposal with post_requirement (agree_stop=false), "
-                        "or reject each with rejected_proposals [{change, why}] using an allowed prefix."
+                        "Accept with post_requirement (agree_stop=false) and run the cut, "
+                        "or reject with DIRECTIONS/USER, or DAG/DUPLICATE only after that "
+                        "exact change is already a done node."
                     ),
                 }
             reply["rejected_proposals"] = rejected
@@ -631,14 +724,49 @@ def _idea_key(row: dict[str, Any]) -> str:
     return " ".join(str(row.get("change") or row.get("idea") or "").split()).lower()
 
 
-def _uncovered(proposals: list[dict[str, Any]], rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _done_idea_keys(lab: Path) -> set[str]:
+    """Change strings of finished DAG nodes. Does not pick the next experiment."""
+    keys: set[str] = set()
+    skip = {"failed", "dropped", "error", "running", "queued", "blocked"}
+    for node in iter_nodes(lab):
+        st = str(node.get("status") or "done").lower()
+        if st in skip:
+            continue
+        keys.add(_idea_key({"change": node.get("change") or ""}))
+        spec = node.get("spec")
+        if isinstance(spec, dict):
+            keys.add(_idea_key({"change": spec.get("change") or ""}))
+    keys.discard("")
+    return keys
+
+
+def _covers_proposal(lab: Path, proposal: dict[str, Any], why: str) -> bool:
+    text = str(why or "").strip()
+    if _OFF_TASK.match(text) or not _COVER_OK.match(text):
+        return False
+    prefix = str(_COVER_OK.match(text).group(1) or "").upper()
+    if prefix in {"DIRECTIONS", "USER"} or prefix == "用户禁止":
+        return True
+    key = _idea_key(proposal)
+    return bool(key) and key in _done_idea_keys(lab)
+
+
+def _uncovered(
+    proposals: list[dict[str, Any]],
+    rejected: list[dict[str, Any]],
+    lab: Path,
+) -> list[dict[str, Any]]:
     rej = {_idea_key(r): r for r in rejected if _idea_key(r)}
     missing: list[dict[str, Any]] = []
     for prop in proposals:
         key = _idea_key(prop)
         hit = rej.get(key)
-        if not hit or not _SKIP_OK.match(str(hit.get("why") or hit.get("reason") or "").strip()):
-            missing.append(prop)
+        why = str((hit or {}).get("why") or (hit or {}).get("reason") or "").strip()
+        if not hit or not _covers_proposal(lab, prop, why):
+            row = dict(prop)
+            if why:
+                row["reject_why"] = why
+            missing.append(row)
     return missing
 
 
@@ -694,14 +822,18 @@ def record_exhausted(params: dict[str, Any]) -> dict[str, Any]:
     mail = _load_mail(lab, str(stop.get("mail_id") or ""))
     proposals = list((mail or {}).get("proposals") or [])
     if proposals:
-        missing = _uncovered(proposals, skipped + rejected)
+        missing = _uncovered(proposals, skipped + rejected, lab)
         if missing:
             return {
                 "ok": False,
                 "error": "cannot record_exhausted: interceptor proposals remain unanswered",
                 "unanswered_proposals": missing,
                 "must": "ask_designer",
-                "hint": "Designer must post_requirement for accepted ideas, or skipped/rejected_proposals must cover every interceptor change.",
+                "hint": (
+                    "Designer must post_requirement and run unmatched cuts. "
+                    "DAG/DUPLICATE skipped/rejected must match a done node's change text, "
+                    "not a related 1-D curve."
+                ),
             }
     bad_skip = [
         item

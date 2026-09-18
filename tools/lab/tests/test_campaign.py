@@ -51,6 +51,7 @@ class CampaignGateTests(unittest.TestCase):
             self.assertFalse(out["may_stop"])
             self.assertEqual(out["must"], "call_reviewer")
             self.assertEqual(out["next"]["id"], "q1")
+            self.assertEqual(out.get("hat") or "main", "main")
             via = handle({"action": "campaign_gate", "lab": str(lab)})
             self.assertFalse(via["may_stop"])
             self.assertEqual(via["must"], "call_reviewer")
@@ -70,13 +71,12 @@ class CampaignGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             lab = Path(raw)
             _write_queue(lab, [{"id": "q3", "title": "done one", "priority": 1, "status": "done"}])
-            _write_div(lab, "exhausted")
-            _write_stop(lab, True)
             out = check_stop(lab)
             self.assertTrue(out["ok"])
             self.assertTrue(out["may_stop"])
             self.assertFalse(out["may_yield"])
             self.assertEqual(out["must"], "ask_user")
+            self.assertFalse(out.get("interceptor_stop"))
 
     def test_fresh_empty_calls_designer(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -86,13 +86,19 @@ class CampaignGateTests(unittest.TestCase):
             self.assertFalse(out["may_stop"])
             self.assertEqual(out["must"], "call_designer")
 
-    def test_history_empty_calls_divergence(self) -> None:
+    def test_history_empty_calls_ask_user_intercept(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             lab = Path(raw)
             _write_queue(lab, [{"id": "q3", "title": "done one", "priority": 1, "status": "done"}])
             out = check_stop(lab)
-            self.assertFalse(out["may_stop"])
-            self.assertEqual(out["must"], "call_divergence")
+            self.assertFalse(out["may_yield"])
+            self.assertEqual(out["must"], "ask_user")
+            from lab.campaign import ask_user
+
+            hit = ask_user(lab, "四个问题都做完了，要不要写论文？")
+            self.assertTrue(hit.get("intercept"))
+            self.assertFalse(hit["allowed"])
+            self.assertFalse(hit["may_yield"])
 
     def test_running_forbids_stop_even_if_exhausted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -141,18 +147,54 @@ class CampaignGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             lab = Path(raw)
             _write_queue(lab, [{"id": "q7", "title": "done", "priority": 1, "status": "done"}])
-            _write_div(lab, "exhausted")
-            _write_stop(lab, True)
-            from lab.campaign import ask_user
+            from lab.campaign import ask_user, record_intercept
 
             first = check_stop(lab)
             self.assertTrue(first["may_stop"])
             self.assertFalse(first["may_yield"])
+            blocked = ask_user(lab, "这一场可以停了，要不要换题？")
+            self.assertTrue(blocked.get("intercept"))
+            self.assertFalse(blocked["allowed"])
+            record_intercept(lab, stop=True, ask="导出或停止。", raw="")
             opened = ask_user(lab, "这一场可以停了，要不要换题？")
             self.assertTrue(opened["allowed"])
             self.assertTrue(opened["may_yield"])
             again = check_stop(lab)
             self.assertTrue(again["may_yield"])
+
+    def test_interceptor_continue_acts_as_user(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            lab = Path(raw)
+            _write_queue(lab, [{"id": "q8", "title": "done", "priority": 1, "status": "done"}])
+            from lab.campaign import ask_user, record_intercept
+
+            record_intercept(
+                lab,
+                stop=False,
+                as_user="继续。去 call_designer 出二维网格需求。",
+                raw="",
+            )
+            gate = check_stop(lab)
+            self.assertEqual(gate["must"], "call_designer")
+            self.assertFalse(gate["may_stop"])
+            refused = ask_user(lab, "要停吗")
+            self.assertFalse(refused["allowed"])
+            self.assertEqual(refused["must"], "call_designer")
+
+    def test_record_intercept_rejects_campaign_loop_text(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            lab = Path(raw)
+            from lab.campaign import latest_intercept, pending_as_user, record_intercept
+
+            out = record_intercept(
+                lab,
+                stop=False,
+                as_user="[campaign-loop] 这场还没停。must=call_designer。",
+                raw="[campaign-loop] 这场还没停。must=call_designer。",
+            )
+            self.assertFalse(out["ok"])
+            self.assertIsNone(latest_intercept(lab))
+            self.assertIsNone(pending_as_user(lab))
 
     def test_ask_user_allowed_when_unbound(self) -> None:
         from lab.campaign import ask_user

@@ -119,7 +119,8 @@ export default function (pi: ExtensionAPI) {
 			"call_reviewer",
 			"Call reviewer",
 			"Main loop: put on the Reviewer hat. Takes the next queued job, checks leak + spec vs code, "
-				+ "runs the fit, writes the DAG. On fail, bounce_to_experimenter. Must not edit lab src.",
+				+ "runs the fit, writes the DAG. Pass hard_checks into complete_experiment. "
+				+ "On contrast_violation or fail, bounce_to_experimenter with the tool error verbatim. Must not edit lab src.",
 			Type.Object({ note: Type.Optional(Type.String()) }),
 			"call_reviewer",
 		),
@@ -129,10 +130,17 @@ export default function (pi: ExtensionAPI) {
 			"call_divergence",
 			"Call divergence interceptor",
 			"Main loop: intercept a would-be stop while the queue is empty. "
-				+ "Do not read designer memory. Propose diverse schemes from DIRECTIONS+CHARTER+DAG, "
-				+ "ask why they were not tried, demand more papers. Stop only after repeated challenges "
-				+ "(default 3 rounds). record_exhausted then ask_user. Do not write exhausted JSON with the editor.",
-			Type.Object({ note: Type.Optional(Type.String()) }),
+				+ "Pass summary= what you would tell the user (design/implement/review so far). "
+				+ "Interceptor sees DIRECTIONS + that summary + DAG, not designer memory. "
+				+ "It challenges missing properties, papers, stability, and remaining depth. "
+				+ "Stop only after 2 challenge rounds. record_exhausted then ask_user. "
+				+ "Do not write exhausted JSON with the editor.",
+			Type.Object({
+				summary: Type.String({
+					description: "Main loop wrap-up of design/implement/review so far; what it would tell the user. Interceptor attacks this. Required.",
+				}),
+				note: Type.Optional(Type.String()),
+			}),
 			"call_divergence",
 		),
 	);
@@ -163,9 +171,9 @@ export default function (pi: ExtensionAPI) {
 			"designer_reply",
 			"Designer reply",
 			"Designer: answer an experimenter question, or a stop_check challenge. "
-				+ "challenge_round < 3: agree_stop is refused; deep_research a new query and post_requirement. "
-				+ "After repeated challenges, reject interceptor proposals with CHARTER/DIRECTIONS/DAG/USER/DUPLICATE "
-				+ "or unused papers still block stop. Pass mail_id from the packet.",
+				+ "challenge_round < 2: agree_stop is refused; deep_research a new query and post_requirement. "
+				+ "After two challenges, cover interceptor proposals with DAG/DUPLICATE/DIRECTIONS/USER "
+				+ "(CHARTER does not count) or unused papers still block stop. Pass mail_id from the packet.",
 			Type.Object({
 				mail_id: Type.Optional(Type.String()),
 				kind: Type.Optional(Type.String({ description: "clarify | stop_check" })),
@@ -181,7 +189,7 @@ export default function (pi: ExtensionAPI) {
 					description: "Paper ids DIRECTIONS/CHARTER exclude; unused papers otherwise block agree_stop",
 				})),
 				rejected_proposals: Type.Optional(Type.String({
-					description: "JSON list of {change, why}. Required to agree_stop when the interceptor sent proposals. why starts with CHARTER|DIRECTIONS|DAG|USER|DUPLICATE",
+					description: "JSON list of {change, why}. Required to agree_stop when the interceptor sent proposals. why starts with DAG|DUPLICATE|DIRECTIONS|USER (not CHARTER)",
 				})),
 			}),
 			"designer_reply",
@@ -192,11 +200,15 @@ export default function (pi: ExtensionAPI) {
 			"post_requirement",
 			"Post designer requirement",
 			"Designer: give the Experimenter a brief (kind, change, knobs, papers, why). Not queue_put. "
-				+ "Check search_experiments first so you do not repeat a DAG node.",
+				+ "Ablation must name upstream, held_fixed (same inputs as the parent), and expect_vs_parent "
+				+ "(default not_worse). hard_checks freeze on this id. Check search_experiments first.",
 			Type.Object({
 				change: Type.String(),
 				kind: Type.Optional(Type.String()),
 				upstream: Type.Optional(Type.String()),
+				held_fixed: Type.Optional(Type.String({ description: "comma-separated inputs that must match the parent" })),
+				expect_vs_parent: Type.Optional(Type.String({ description: "improve | not_worse | worsen | any" })),
+				hard_checks: Type.Optional(Type.String({ description: 'JSON object, e.g. {"emergency_zero":true}' })),
 				reason: Type.Optional(Type.String()),
 				meaning: Type.Optional(Type.String()),
 				necessity: Type.Optional(Type.String()),
@@ -218,7 +230,8 @@ export default function (pi: ExtensionAPI) {
 			"bounce_to_experimenter",
 			"Bounce back to experimenter",
 			"Reviewer: reject a cut or a crashed run. Include original requirement_id, task_id, reasons, "
-				+ "optional run_error, and current code_sha256. Experimenter has no memory — this packet is the whole story.",
+				+ "optional run_error, and current code_sha256. Implementation defects only — do not authorize "
+				+ "dropping hard_checks, and do not interpret metrics as science. Experimenter has no memory.",
 			Type.Object({
 				reasons: Type.String({ description: "Why it failed (semicolon-separated ok)" }),
 				requirement_id: Type.Optional(Type.String()),
@@ -275,7 +288,8 @@ export default function (pi: ExtensionAPI) {
 			"record_exhausted",
 			"Record divergence exhausted",
 			"Divergence interceptor only: write verdict=exhausted after designer agree_stop. "
-				+ "skipped.why must start with CHARTER|DIRECTIONS|DAG|USER|DUPLICATE; "
+				+ "skipped.why for leftover ideas may start with CHARTER|DIRECTIONS|DAG|USER|DUPLICATE; "
+				+ "covering the interceptor's proposals requires DAG|DUPLICATE|DIRECTIONS|USER (not CHARTER). "
 				+ "'already optimal' is not a reason to skip an untried direction. "
 				+ "Unused downloaded papers block this. Do not hand-edit reviews/verdicts. Then campaign_gate and ask_user.",
 			Type.Object({

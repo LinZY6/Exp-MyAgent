@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from lab.campaign import ask_user as check_ask_user
-from lab.campaign import check_stop
+from lab.campaign import check_stop, record_intercept
 from lab.codehash import check_run, digest
 from lab.safety import inspect_lab, is_within, resolve_lab_path
 from lab.session import load as load_session
@@ -165,6 +165,24 @@ def ask_user(params: dict[str, Any]) -> dict[str, Any]:
     return check_ask_user(_bound_lab(params), str(params.get("text") or ""))
 
 
+def _truthy(value: Any) -> bool:
+    return value in (True, "true", "True", 1, "1")
+
+
+def intercept_record(params: dict[str, Any]) -> dict[str, Any]:
+    lab = _bound_lab(params)
+    if lab is None:
+        return {"ok": False, "error": "no lab bound; use_lab first"}
+    return record_intercept(
+        lab,
+        stop=_truthy(params.get("stop")),
+        as_user=str(params.get("as_user") or ""),
+        ask=str(params.get("ask") or ""),
+        raw=str(params.get("raw") or ""),
+        summary=str(params.get("summary") or params.get("text") or ""),
+    )
+
+
 def handle(params: dict[str, Any]) -> dict[str, Any]:
     action = str(params.get("action") or "use_lab").strip()
     if action in {"status", "lab_status"}:
@@ -179,6 +197,8 @@ def handle(params: dict[str, Any]) -> dict[str, Any]:
         return campaign_gate(params)
     if action in {"ask_user", "user_gate"}:
         return ask_user(params)
+    if action in {"record_intercept", "intercept_record"}:
+        return intercept_record(params)
     if action in {"use_lab", "inspect", "bind"}:
         return use_lab(params)
     return {"ok": False, "error": f"unknown action: {action}"}
